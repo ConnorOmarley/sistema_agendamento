@@ -1,26 +1,86 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --color-background: hsl(40 38% 97%);
+  --color-foreground: hsl(260 25% 11%);
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(260 25% 11%);
+
+  --color-muted: hsl(260 15% 96%);
+  --color-muted-foreground: hsl(260 8% 46%);
+
+  --color-primary: hsl(262 83% 58%);
+  --color-primary-foreground: hsl(0 0% 100%);
+
+  --color-secondary: hsl(340 82% 67%);
+  --color-secondary-foreground: hsl(0 0% 100%);
+
+  --color-accent: hsl(160 71% 45%);
+  --color-accent-foreground: hsl(0 0% 100%);
+
+  --color-warning: hsl(38 95% 56%);
+  --color-warning-foreground: hsl(0 0% 100%);
+
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --color-border: hsl(260 15% 91%);
+  --color-input: hsl(260 15% 91%);
+  --color-ring: hsl(262 83% 58%);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .bg-app-gradient {
+    background-image:
+      radial-gradient(at 20% 15%, hsl(262 100% 92% / 0.6) 0px, transparent 50%),
+      radial-gradient(at 80% 10%, hsl(340 100% 92% / 0.5) 0px, transparent 50%),
+      radial-gradient(at 70% 90%, hsl(160 100% 88% / 0.5) 0px, transparent 50%);
+  }
+  .gradient-primary {
+    background-image: linear-gradient(135deg, hsl(262 83% 62%) 0%, hsl(290 75% 60%) 50%, hsl(340 82% 67%) 100%);
+  }
+  .gradient-emerald {
+    background-image: linear-gradient(135deg, hsl(160 71% 45%) 0%, hsl(180 71% 45%) 100%);
+  }
+  .gradient-amber {
+    background-image: linear-gradient(135deg, hsl(38 95% 56%) 0%, hsl(20 90% 60%) 100%);
+  }
+  .gradient-rose {
+    background-image: linear-gradient(135deg, hsl(340 82% 67%) 0%, hsl(0 84% 65%) 100%);
+  }
+  .glass-card {
+    background-color: hsl(0 0% 100% / 0.85);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out;
+  }
 }

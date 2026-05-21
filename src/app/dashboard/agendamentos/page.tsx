@@ -2,8 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  CalendarDays,
+  Clock,
+  Plus,
+  Trash2,
+  FileText,
+  AlertCircle,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import Link from 'next/link';
+import { Card } from '@/components/ui/card';
+import { Input, Select, Textarea } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Aluno {
   id: string;
@@ -18,16 +30,13 @@ interface Agendamento {
   valor_sessao: number;
   status_pagamento: string;
   observacoes: string | null;
-  alunos: {
-    id: string;
-    nome: string;
-  } | null;
+  alunos: { id: string; nome: string } | null;
 }
 
 const HORARIOS_DISPONIVEIS = [
-  '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
-  '13:00', '14:00', '15:00', '16:00', '17:00', '18:00',
-  '19:00', '20:00'
+  '07:00','08:00','09:00','10:00','11:00','12:00',
+  '13:00','14:00','15:00','16:00','17:00','18:00',
+  '19:00','20:00',
 ];
 
 export default function AgendaGeral() {
@@ -35,7 +44,7 @@ export default function AgendaGeral() {
   const [carregando, setCarregando] = useState(true);
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
-  
+
   const [alunoSelecionado, setAlunoSelecionado] = useState('');
   const [dataSessao, setDataSessao] = useState('');
   const [horarioSessao, setHorarioSessao] = useState('');
@@ -47,10 +56,7 @@ export default function AgendaGeral() {
 
   async function carregarDadosAgenda() {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      router.push('/login');
-      return;
-    }
+    if (!session) { router.push('/login'); return; }
 
     const { data: listaAlunos } = await supabase
       .from('alunos')
@@ -62,221 +68,131 @@ export default function AgendaGeral() {
 
     const { data: listaAgendamentos } = await supabase
       .from('agendamentos')
-      .select(`
-        id,
-        data,
-        horario,
-        status,
-        valor_sessao,
-        status_pagamento,
-        observacoes,
-        alunos (
-          id,
-          nome
-        )
-      `)
+      .select(`id, data, horario, status, valor_sessao, status_pagamento, observacoes, alunos (id, nome)`)
       .eq('user_id', session.user.id)
       .order('data', { ascending: false })
       .order('horario', { ascending: true });
 
-    if (listaAgendamentos) {
-      setAgendamentos(listaAgendamentos as unknown as Agendamento[]);
-    }
+    if (listaAgendamentos) setAgendamentos(listaAgendamentos as unknown as Agendamento[]);
     setCarregando(false);
   }
 
-  useEffect(() => {
-    carregarDadosAgenda();
-  }, [router]);
+  useEffect(() => { carregarDadosAgenda(); }, [router]);
 
   useEffect(() => {
-    if (!dataSessao) {
-      setHorariosOcupadosNoDia([]);
-      return;
-    }
-    
+    if (!dataSessao) { setHorariosOcupadosNoDia([]); return; }
     const ocupados = agendamentos
       .filter(ag => ag.data === dataSessao && ag.status !== 'Faltou')
       .map(ag => ag.horario.substring(0, 5));
-      
     setHorariosOcupadosNoDia(ocupados);
-    
-    if (!modoManual && ocupados.includes(horarioSessao)) {
-      setHorarioSessao('');
-    }
+    if (!modoManual && ocupados.includes(horarioSessao)) setHorarioSessao('');
   }, [dataSessao, agendamentos, horarioSessao, modoManual]);
 
   async function handleCriarAgendamento(e: React.FormEvent) {
     e.preventDefault();
     if (!alunoSelecionado || !dataSessao || !horarioSessao) return;
-
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { error } = await supabase
-      .from('agendamentos')
-      .insert([
-        {
-          user_id: session.user.id,
-          aluno_id: alunoSelecionado,
-          data: dataSessao,
-          horario: horarioSessao,
-          valor_sessao: parseFloat(valorSessao),
-          status: 'Agendado',
-          status_pagamento: 'Pendente',
-          observacoes: obsSessao.trim() || null
-        }
-      ]);
+    const { error } = await supabase.from('agendamentos').insert([{
+      user_id: session.user.id,
+      aluno_id: alunoSelecionado,
+      data: dataSessao,
+      horario: horarioSessao,
+      valor_sessao: parseFloat(valorSessao),
+      status: 'Agendado',
+      status_pagamento: 'Pendente',
+      observacoes: obsSessao.trim() || null
+    }]);
 
     if (!error) {
-      setAlunoSelecionado('');
-      setDataSessao('');
-      setHorarioSessao('');
-      setObsSessao('');
-      setModoManual(false);
+      setAlunoSelecionado(''); setDataSessao(''); setHorarioSessao(''); setObsSessao(''); setModoManual(false);
       carregarDadosAgenda();
     }
   }
 
   async function atualizarAgendamento(id: string, campo: 'status' | 'status_pagamento', valor: string) {
-    const { error } = await supabase
-      .from('agendamentos')
-      .update({ [campo]: valor })
-      .eq('id', id);
-
-    if (!error) {
-      setAgendamentos(atual => 
-        atual.map(ag => ag.id === id ? { ...ag, [campo]: valor } : ag)
-      );
-    }
+    const { error } = await supabase.from('agendamentos').update({ [campo]: valor }).eq('id', id);
+    if (!error) setAgendamentos(atual => atual.map(ag => ag.id === id ? { ...ag, [campo]: valor } : ag));
   }
 
   async function handleDeletarAgendamento(id: string) {
     if (!confirm('Deseja realmente cancelar este agendamento?')) return;
-    
-    const { error } = await supabase
-      .from('agendamentos')
-      .delete()
-      .eq('id', id);
-
-    if (!error) {
-      setAgendamentos(atual => atual.filter(ag => ag.id !== id));
-    }
+    const { error } = await supabase.from('agendamentos').delete().eq('id', id);
+    if (!error) setAgendamentos(atual => atual.filter(ag => ag.id !== id));
   }
 
   if (carregando) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-gray-500 font-medium animate-pulse">Carregando Agenda Geral...</p>
-      </div>
-    );
+    return <div className="flex items-center justify-center py-32 animate-pulse"><p className="text-[var(--color-muted-foreground)]">Carregando agenda...</p></div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 pb-16">
-      <nav className="bg-white shadow-sm border-b px-8 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-8">
-          <Link href="/dashboard" className="text-sm font-bold text-indigo-600 hover:underline">← Voltar para Painel</Link>
-          <span className="text-gray-300">|</span>
-          <h1 className="text-md font-bold text-gray-700">Controle de Agendamentos e Sessões</h1>
-        </div>
-      </nav>
+    <div className="space-y-8 animate-fade-in">
+      <header className="space-y-1">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)]">Agenda</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">📅 Agendamentos</h1>
+        <p className="text-sm text-[var(--color-muted-foreground)]">Marque sessões, controle presença e pagamentos.</p>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* FORMULÁRIO DE NOVO AGENDAMENTO */}
-        <div className="bg-white border rounded-xl p-6 shadow-sm h-fit space-y-4">
-          <div>
-            <h2 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider">Novo Agendamento</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Marque uma nova sessão para seus alunos.</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* FORM NOVO AGENDAMENTO */}
+        <Card className="p-6 space-y-5 h-fit">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl gradient-primary flex items-center justify-center shadow-md shadow-purple-500/25">
+              <Plus className="size-5 text-white" />
+            </div>
+            <div>
+              <h2 className="font-extrabold tracking-tight">Nova sessão</h2>
+              <p className="text-xs text-[var(--color-muted-foreground)]">Marque um atendimento</p>
+            </div>
           </div>
-          
-          <form onSubmit={handleCriarAgendamento} className="space-y-4 text-xs">
-            <div>
-              <label htmlFor="select-aluno" className="block font-bold text-gray-600 mb-1">Selecione o Aluno *</label>
-              <select 
-                id="select-aluno"
-                title="Escolha um aluno para o agendamento"
-                required
-                value={alunoSelecionado}
-                onChange={(e) => setAlunoSelecionado(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 p-2 focus:outline-none focus:border-indigo-500 bg-white"
-              >
+
+          <form onSubmit={handleCriarAgendamento} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="select-aluno">Aluno *</Label>
+              <Select id="select-aluno" required value={alunoSelecionado} onChange={(e) => setAlunoSelecionado(e.target.value)}>
                 <option value="">Selecione...</option>
-                {alunos.map(a => (
-                  <option key={a.id} value={a.id}>{a.nome}</option>
-                ))}
-              </select>
+                {alunos.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
+              </Select>
             </div>
 
-            <div className="grid grid-cols-1 gap-1">
-              <label htmlFor="input-data" className="block font-bold text-gray-600 mb-1">Data do Atendimento *</label>
-              <input 
-                id="input-data"
-                type="date" 
-                required
-                value={dataSessao}
-                onChange={(e) => setDataSessao(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 p-2 focus:outline-none focus:border-indigo-500 text-sm font-medium"
-              />
+            <div className="space-y-1.5">
+              <Label htmlFor="input-data">Data *</Label>
+              <Input id="input-data" type="date" required value={dataSessao} onChange={(e) => setDataSessao(e.target.value)} />
             </div>
 
-            {/* SELETOR EM GRADE OU MANUAL INTELIGENTE */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="block font-bold text-gray-600">Horário do Atendimento *</span>
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <Label>Horário *</Label>
                 {dataSessao && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setModoManual(!modoManual);
-                      setHorarioSessao('');
-                    }}
-                    className="text-[10px] text-indigo-600 font-bold hover:underline"
-                  >
-                    {modoManual ? '📋 Ver grade de horas' : '✍️ Digitar hora específica'}
+                  <button type="button" onClick={() => { setModoManual(!modoManual); setHorarioSessao(''); }} className="text-[10px] font-bold text-[var(--color-primary)] hover:underline">
+                    {modoManual ? 'Ver grade' : 'Digitar manual'}
                   </button>
                 )}
               </div>
 
               {!dataSessao ? (
-                <p className="text-[11px] text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-200 font-medium">
-                  ⚠️ Selecione uma data acima para liberar os horários.
-                </p>
-              ) : modoManual ? (
-                /* INPUT MANUAL TOTALMENTE ACESSÍVEL E COMPATÍVEL */
-                <div className="space-y-1">
-                  <input
-                    id="input-hora-manual"
-                    title="Insira o horário personalizado"
-                    type="time"
-                    required
-                    value={horarioSessao}
-                    onChange={(e) => setHorarioSessao(e.target.value)}
-                    className="w-full rounded-lg border border-indigo-500 p-2 focus:outline-none text-sm font-bold bg-indigo-50/50 text-indigo-900"
-                  />
-                  <span className="text-[10px] text-gray-400 block italic">Defina qualquer horário personalizado livremente.</span>
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
+                  <AlertCircle className="size-4 text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-[11px] text-amber-800 font-medium">Selecione uma data para liberar os horários.</p>
                 </div>
+              ) : modoManual ? (
+                <Input id="input-hora-manual" type="time" required value={horarioSessao} onChange={(e) => setHorarioSessao(e.target.value)} />
               ) : (
-                /* GRID PADRÃO COM BLOQUEIO DE CONFLITOS */
                 <div className="grid grid-cols-4 gap-1.5">
                   {HORARIOS_DISPONIVEIS.map((hora) => {
-                    const estaOcupado = horariosOcupadosNoDia.includes(hora);
-                    const estaSelecionado = horarioSessao === hora;
-
+                    const ocupado = horariosOcupadosNoDia.includes(hora);
+                    const selecionado = horarioSessao === hora;
                     return (
                       <button
-                        key={hora}
-                        type="button"
-                        disabled={estaOcupado}
-                        onClick={() => setHorarioSessao(hora)}
-                        className={`p-2 rounded-lg font-bold border text-center transition-all ${
-                          estaOcupado 
-                            ? 'bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed line-through' 
-                            : estaSelecionado
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                            : 'bg-white hover:bg-indigo-50 hover:text-indigo-600 border-gray-200 text-gray-700'
-                        }`}
+                        key={hora} type="button" disabled={ocupado} onClick={() => setHorarioSessao(hora)}
+                        className={
+                          ocupado
+                            ? 'p-2 rounded-lg text-xs font-bold border bg-[var(--color-muted)] text-[var(--color-muted-foreground)] line-through cursor-not-allowed'
+                            : selecionado
+                            ? 'p-2 rounded-lg text-xs font-bold gradient-primary text-white shadow-md shadow-purple-500/25'
+                            : 'p-2 rounded-lg text-xs font-bold border border-[var(--color-border)] bg-white hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors'
+                        }
                       >
                         {hora}
                       </button>
@@ -284,135 +200,102 @@ export default function AgendaGeral() {
                   })}
                 </div>
               )}
-              <input type="hidden" required value={horarioSessao} />
             </div>
 
-            <div>
-              <label htmlFor="input-valor" className="block font-bold text-gray-600 mb-1">Valor da Sessão (R$)</label>
-              <input 
-                id="input-valor"
-                type="number" 
-                step="0.01"
-                value={valorSessao}
-                onChange={(e) => setValorSessao(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 p-2 focus:outline-none focus:border-indigo-500"
-              />
+            <div className="space-y-1.5">
+              <Label htmlFor="input-valor">Valor da sessão (R$)</Label>
+              <Input id="input-valor" type="number" step="0.01" value={valorSessao} onChange={(e) => setValorSessao(e.target.value)} />
             </div>
 
-            <div>
-              <label htmlFor="textarea-obs" className="block font-bold text-gray-600 mb-1">Observações (Opcional)</label>
-              <textarea 
-                id="textarea-obs"
-                placeholder="Ex: Sala de atendimento, trazer material..."
-                value={obsSessao}
-                onChange={(e) => setObsSessao(e.target.value)}
-                rows={2}
-                className="w-full rounded-lg border border-gray-300 p-2 focus:outline-none focus:border-indigo-500"
-              />
+            <div className="space-y-1.5">
+              <Label htmlFor="textarea-obs">Observações</Label>
+              <Textarea id="textarea-obs" placeholder="Ex: sala 2, trazer material…" value={obsSessao} onChange={(e) => setObsSessao(e.target.value)} rows={2} />
             </div>
 
-            <button 
-              type="submit" 
-              disabled={!horarioSessao}
-              className={`w-full font-bold p-2.5 rounded-lg text-xs transition-colors shadow-sm text-white ${
-                horarioSessao ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-300 cursor-not-allowed'
-              }`}
-            >
-              🗓️ Confirmar Agendamento
-            </button>
+            <Button type="submit" size="lg" disabled={!horarioSessao} className="w-full">
+              <CalendarDays className="size-4" />
+              Confirmar agendamento
+            </Button>
           </form>
-        </div>
+        </Card>
 
-        {/* CRONOGRAMA GERAL DE SESSÕES */}
-        <div className="lg:col-span-2 bg-white border rounded-xl shadow-sm overflow-hidden">
-          <div className="p-6 border-b">
-            <h3 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider">Histórico e Próximas Sessões</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Gerencie a presença, altere o financeiro ou cancele sessões aqui.</p>
+        {/* CRONOGRAMA */}
+        <Card className="lg:col-span-2 overflow-hidden">
+          <div className="p-6 border-b border-[var(--color-border)]">
+            <h2 className="text-lg font-extrabold tracking-tight">Histórico e próximas sessões</h2>
+            <p className="text-xs text-[var(--color-muted-foreground)]">Gerencie presença, pagamento ou cancelamento</p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b text-gray-400 font-bold uppercase tracking-wider">
-                  <th className="px-4 py-3">Aluno / Detalhes</th>
-                  <th className="px-4 py-3">Data & Hora</th>
-                  <th className="px-4 py-3">Presença</th>
-                  <th className="px-4 py-3">Financeiro</th>
-                  <th className="px-4 py-3 text-right">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 text-gray-700">
-                {agendamentos.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-400 italic">
-                      Nenhuma sessão agendada até o momento.
-                    </td>
-                  </tr>
-                ) : (
-                  agendamentos.map((ag) => {
-                    const [ano, mes, dia] = ag.data.split('-');
-                    return (
-                      <tr key={ag.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-gray-900">{ag.alunos?.nome || 'Aluno Removido'}</p>
-                          {ag.observacoes && <p className="text-[10px] text-gray-400 italic max-w-xs truncate">{ag.observacoes}</p>}
-                        </td>
-                        
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="font-medium text-gray-700">{dia}/{mes}/{ano}</span>
-                          <span className="block text-[10px] text-gray-400 font-bold">{ag.horario}</span>
-                        </td>
+          <div className="divide-y divide-[var(--color-border)]">
+            {agendamentos.length === 0 ? (
+              <div className="p-12 text-center">
+                <CalendarDays className="size-10 mx-auto text-[var(--color-muted-foreground)] opacity-40 mb-3" />
+                <p className="text-sm text-[var(--color-muted-foreground)] italic">Nenhuma sessão agendada ainda.</p>
+              </div>
+            ) : (
+              agendamentos.map((ag) => {
+                const [ano, mes, dia] = ag.data.split('-');
+                const corStatus =
+                  ag.status === 'Concluído' ? 'success' :
+                  ag.status === 'Faltou' ? 'danger' : 'info';
+                const corPg = ag.status_pagamento === 'Pago' ? 'success' : 'warning';
+                return (
+                  <div key={ag.id} className="p-4 sm:p-6 hover:bg-[var(--color-muted)]/30 transition-colors flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex items-center gap-3 sm:w-48 shrink-0">
+                      <div className="flex flex-col items-center justify-center size-14 rounded-xl gradient-primary text-white shadow-md shadow-purple-500/25 shrink-0">
+                        <span className="text-[9px] uppercase font-bold opacity-90">{['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][parseInt(mes)-1]}</span>
+                        <span className="text-base font-black leading-none">{dia}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm truncate">{ag.alunos?.nome || 'Aluno removido'}</p>
+                        <p className="text-[11px] text-[var(--color-muted-foreground)] flex items-center gap-1 mt-0.5">
+                          <Clock className="size-3" /> {ag.horario.substring(0,5)} · {dia}/{mes}/{ano}
+                        </p>
+                      </div>
+                    </div>
 
-                        <td className="px-4 py-3">
-                          <select
-                            title="Alterar presença da sessão"
-                            value={ag.status}
-                            onChange={(e) => atualizarAgendamento(ag.id, 'status', e.target.value)}
-                            className={`rounded px-2 py-1 font-semibold text-[11px] border bg-white focus:outline-none ${
-                              ag.status === 'Concluído' ? 'text-green-700 border-green-200 bg-green-50' :
-                              ag.status === 'Faltou' ? 'text-red-700 border-red-200 bg-red-50' :
-                              'text-blue-700 border-blue-200 bg-blue-50'
-                            }`}
-                          >
-                            <option value="Agendado">🗓️ Agendado</option>
-                            <option value="Concluído">✅ Concluído</option>
-                            <option value="Faltou">❌ Faltou</option>
-                          </select>
-                        </td>
+                    {ag.observacoes && (
+                      <div className="hidden sm:flex items-start gap-1.5 flex-1 min-w-0 text-[11px] text-[var(--color-muted-foreground)] italic">
+                        <FileText className="size-3 mt-0.5 shrink-0" />
+                        <p className="truncate">{ag.observacoes}</p>
+                      </div>
+                    )}
 
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-gray-800 mb-1">R$ {Number(ag.valor_sessao).toFixed(2)}</p>
-                          <select
-                            title="Alterar status do pagamento"
-                            value={ag.status_pagamento}
-                            onChange={(e) => atualizarAgendamento(ag.id, 'status_pagamento', e.target.value)}
-                            className={`rounded px-2 py-0.5 text-[10px] font-bold border bg-white focus:outline-none ${
-                              ag.status_pagamento === 'Pago' ? 'text-emerald-700 border-emerald-200 bg-emerald-50' : 'text-amber-700 border-amber-200 bg-amber-50'
-                            }`}
-                          >
-                            <option value="Pendente">Pendente</option>
-                            <option value="Pago">Pago</option>
-                          </select>
-                        </td>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={corStatus}>{ag.status}</Badge>
+                        <Select value={ag.status} onChange={(e) => atualizarAgendamento(ag.id, 'status', e.target.value)} className="h-7 text-[10px] px-2">
+                          <option value="Agendado">🗓️ Agendado</option>
+                          <option value="Concluído">✅ Concluído</option>
+                          <option value="Faltou">❌ Faltou</option>
+                        </Select>
+                      </div>
 
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => handleDeletarAgendamento(ag.id)}
-                            className="text-gray-400 hover:text-red-600 font-bold p-1 text-[11px]"
-                            title="Remover Agendamento"
-                          >
-                            🗑️ Cancelar
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                      <div className="flex flex-col gap-1">
+                        <div className="text-[10px] font-bold text-[var(--color-foreground)]">R$ {Number(ag.valor_sessao).toFixed(2)}</div>
+                        <Select value={ag.status_pagamento} onChange={(e) => atualizarAgendamento(ag.id, 'status_pagamento', e.target.value)} className="h-7 text-[10px] px-2">
+                          <option value="Pendente">⏳ Pendente</option>
+                          <option value="Pago">💰 Pago</option>
+                        </Select>
+                        <Badge variant={corPg} className="self-start">{ag.status_pagamento}</Badge>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeletarAgendamento(ag.id)}
+                        className="size-9 rounded-xl text-[var(--color-muted-foreground)] hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center transition-colors"
+                        title="Cancelar agendamento"
+                        aria-label="Cancelar agendamento"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
-        </div>
-
+        </Card>
       </div>
     </div>
   );

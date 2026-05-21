@@ -2,8 +2,24 @@
 
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import {
+  ArrowLeft,
+  Trash2,
+  Wallet,
+  Clock,
+  FileText,
+  Plus,
+  Save,
+  CheckCircle2,
+  User,
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Card } from '@/components/ui/card';
+import { Input, Select, Textarea } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Aluno {
   id: string;
@@ -20,32 +36,26 @@ interface Evolucao {
   relatorio: string;
 }
 
-interface Params {
-  id: string;
-}
+interface Params { id: string }
 
 export default function PerfilAluno({ params }: { params: Promise<Params> | Params }) {
   const router = useRouter();
-  
   const resolvedParams = 'then' in params ? use(params) : params;
   const alunoId = resolvedParams.id;
 
   const [carregando, setCarregando] = useState(true);
   const [aluno, setAluno] = useState<Aluno | null>(null);
   const [evolucoes, setEvolucoes] = useState<Evolucao[]>([]);
-  
-  // Estados dos inputs do formulário cadastral
+
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [contatoResponsavel, setContatoResponsavel] = useState(false);
 
-  // Estados do formulário de nova evolução clínica
   const [tipoRegistro, setTipoRegistro] = useState('Sessão Comum');
   const [relatorio, setRelatorio] = useState('');
   const [alertaSucesso, setAlertaSucesso] = useState(false);
 
-  // Estados das métricas financeiras
   const dataAtual = new Date();
   const [mesFiltro, setMesFiltro] = useState(String(dataAtual.getMonth() + 1).padStart(2, '0'));
   const [anoFiltro, setAnoFiltro] = useState(String(dataAtual.getFullYear()));
@@ -55,12 +65,8 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
 
   async function carregarDadosAluno() {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      router.push('/login');
-      return;
-    }
+    if (!session) { router.push('/login'); return; }
 
-    // Busca os dados cadastrais incluindo a nova flag de responsável
     const { data: dadosAluno } = await supabase
       .from('alunos')
       .select('id, nome, email, telefone, contato_responsavel')
@@ -68,10 +74,7 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
       .eq('user_id', session.user.id)
       .single();
 
-    if (!dadosAluno) {
-      router.push('/dashboard');
-      return;
-    }
+    if (!dadosAluno) { router.push('/dashboard'); return; }
 
     setAluno(dadosAluno);
     setNome(dadosAluno.nome);
@@ -88,36 +91,29 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
 
     setEvolucoes(listaEvolucoes || []);
 
-    // Busca faturamento do período
     const { data: agendamentos } = await supabase
       .from('agendamentos')
       .select('status, valor_sessao, status_pagamento, data')
       .eq('aluno_id', alunoId)
       .eq('user_id', session.user.id);
 
-    const agendamentosValidos = agendamentos || [];
-    const prefixoMesAno = `${anoFiltro}-${mesFiltro}`;
-    
-    const sessoesFiltradas = agendamentosValidos.filter(ag => ag.data.startsWith(prefixoMesAno) && ag.status !== 'Faltou');
-    
-    const pago = sessoesFiltradas.filter(ag => ag.status_pagamento === 'Pago').reduce((sum, ag) => sum + (Number(ag.valor_sessao) || 0), 0);
-    const pendente = sessoesFiltradas.filter(ag => ag.status_pagamento === 'Pendente').reduce((sum, ag) => sum + (Number(ag.valor_sessao) || 0), 0);
+    const validos = agendamentos || [];
+    const prefixo = `${anoFiltro}-${mesFiltro}`;
+    const sessoes = validos.filter(ag => ag.data.startsWith(prefixo) && ag.status !== 'Faltou');
+    const pago = sessoes.filter(ag => ag.status_pagamento === 'Pago').reduce((s, ag) => s + (Number(ag.valor_sessao) || 0), 0);
+    const pendente = sessoes.filter(ag => ag.status_pagamento === 'Pendente').reduce((s, ag) => s + (Number(ag.valor_sessao) || 0), 0);
 
-    setConsultasPeriodo(sessoesFiltradas.length);
+    setConsultasPeriodo(sessoes.length);
     setTotalPago(pago);
     setAReceber(pendente);
-
     setCarregando(false);
   }
 
-  useEffect(() => {
-    carregarDadosAluno();
-  }, [alunoId, mesFiltro, anoFiltro]);
+  useEffect(() => { carregarDadosAluno(); }, [alunoId, mesFiltro, anoFiltro]);
 
   async function handleSalvarFicha(e: React.FormEvent) {
     e.preventDefault();
     if (!nome.trim()) return;
-
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
@@ -133,15 +129,7 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
       .eq('user_id', session.user.id);
 
     if (!error) {
-      // Sincroniza o estado local imediatamente corrigindo o bug visual
-      setAluno(prev => prev ? { 
-        ...prev, 
-        nome: nome.trim(), 
-        email: email.trim() || null, 
-        telefone: telefone.trim() || null,
-        contato_responsavel: contatoResponsavel
-      } : null);
-      
+      setAluno(prev => prev ? { ...prev, nome: nome.trim(), email: email.trim() || null, telefone: telefone.trim() || null, contato_responsavel: contatoResponsavel } : null);
       setAlertaSucesso(true);
       setTimeout(() => setAlertaSucesso(false), 4000);
     }
@@ -150,258 +138,228 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
   async function handleAdicionarEvolucoes(e: React.FormEvent) {
     e.preventDefault();
     if (!relatorio.trim()) return;
-
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { data: novaEvolucao, error } = await supabase
+    const { data: nova, error } = await supabase
       .from('evolucoes')
-      .insert([{
-        aluno_id: alunoId,
-        user_id: session.user.id,
-        tipo_registro: tipoRegistro,
-        relatorio: relatorio.trim()
-      }])
+      .insert([{ aluno_id: alunoId, user_id: session.user.id, tipo_registro: tipoRegistro, relatorio: relatorio.trim() }])
       .select('id, data, tipo_registro, relatorio')
       .single();
 
-    if (!error && novaEvolucao) {
-      setEvolucoes(atual => [novaEvolucao, ...atual]);
+    if (!error && nova) {
+      setEvolucoes(atual => [nova, ...atual]);
       setRelatorio('');
     }
   }
 
   async function handleRemoverAluno() {
     if (!confirm(`Tem certeza absoluta que deseja remover a ficha de ${aluno?.nome}? Todos os registros serão apagados.`)) return;
-
-    const { error } = await supabase
-      .from('alunos')
-      .delete()
-      .eq('id', alunoId);
-
-    if (!error) {
-      router.push('/dashboard');
-    }
+    const { error } = await supabase.from('alunos').delete().eq('id', alunoId);
+    if (!error) router.push('/dashboard');
   }
 
   if (carregando) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-gray-500 font-medium animate-pulse">Carregando prontuário e histórico do aluno...</p>
-      </div>
-    );
+    return <div className="flex items-center justify-center py-32 animate-pulse"><p className="text-[var(--color-muted-foreground)]">Carregando prontuário...</p></div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 pb-16">
-      <nav className="bg-white shadow-sm border-b px-8 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-sm font-bold text-indigo-600 hover:underline">← Voltar para Dashboard</Link>
-          <span className="text-gray-300">|</span>
-          <h1 className="text-md font-black text-gray-700">👤 Prontuário: <span className="text-indigo-600">{aluno?.nome}</span></h1>
-        </div>
-      </nav>
+    <div className="space-y-8 animate-fade-in">
+      <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-bold text-[var(--color-primary)] hover:underline">
+        <ArrowLeft className="size-4" /> Voltar para painel
+      </Link>
 
-      <div className="max-w-7xl mx-auto px-4 pt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        <div className="space-y-6">
-          <div className="bg-white border rounded-xl p-5 shadow-sm space-y-4">
-            <div>
-              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Faturamento do Aluno</span>
-              <p className="text-[11px] text-gray-400 mt-0.5">Escolha o mês e ano para calcular a fatura específica:</p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="size-16 rounded-2xl gradient-primary text-white font-black flex items-center justify-center shadow-lg shadow-purple-500/25 text-2xl">
+            {aluno?.nome?.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)]">Prontuário</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{aluno?.nome}</h1>
+            <p className="text-sm text-[var(--color-muted-foreground)]">{aluno?.email || aluno?.telefone || 'Sem contato cadastrado'}</p>
+          </div>
+        </div>
+      </header>
+
+      {alertaSucesso && (
+        <div className="rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 text-sm font-bold flex items-center gap-2 animate-fade-in">
+          <CheckCircle2 className="size-5" /> Dados atualizados com sucesso!
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Coluna lateral: faturamento + ficha */}
+        <div className="space-y-6 lg:order-1">
+          {/* Faturamento */}
+          <Card className="p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl gradient-emerald flex items-center justify-center shadow-md shadow-emerald-500/25">
+                <Wallet className="size-5 text-white" />
+              </div>
+              <div>
+                <h2 className="font-extrabold text-sm">Faturamento</h2>
+                <p className="text-[11px] text-[var(--color-muted-foreground)]">Por período</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor="filtro-perfil-mes" className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Mês</label>
-                <select
-                  id="filtro-perfil-mes"
-                  title="Selecione o mês"
-                  value={mesFiltro}
-                  onChange={(e) => setMesFiltro(e.target.value)}
-                  className="w-full rounded-md border p-1.5 text-xs bg-white text-gray-700 font-medium focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03">Março</option>
-                  <option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option>
-                  <option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option>
-                  <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="filtro-perfil-ano" className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Ano</label>
-                <select
-                  id="filtro-perfil-ano"
-                  title="Selecione o ano"
-                  value={anoFiltro}
-                  onChange={(e) => setAnoFiltro(e.target.value)}
-                  className="w-full rounded-md border p-1.5 text-xs bg-white text-gray-700 font-medium focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="2025">2025</option>
-                  <option value="2026">2026</option>
-                  <option value="2027">2027</option>
-                </select>
-              </div>
+              <Select value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)} className="h-9 text-xs">
+                <option value="01">Jan</option><option value="02">Fev</option><option value="03">Mar</option>
+                <option value="04">Abr</option><option value="05">Mai</option><option value="06">Jun</option>
+                <option value="07">Jul</option><option value="08">Ago</option><option value="09">Set</option>
+                <option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option>
+              </Select>
+              <Select value={anoFiltro} onChange={(e) => setAnoFiltro(e.target.value)} className="h-9 text-xs">
+                <option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option>
+              </Select>
             </div>
 
-            <div className="divide-y text-xs text-gray-600 pt-2 space-y-3">
-              <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
-                <span className="font-medium text-gray-500">Consultas no Período</span>
-                <span className="font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">{consultasPeriodo}</span>
+            <div className="space-y-2 pt-1">
+              <div className="rounded-xl bg-sky-50 px-3 py-2.5 flex items-center justify-between">
+                <span className="text-xs font-bold text-sky-700">Consultas no período</span>
+                <span className="font-black text-sky-900">{consultasPeriodo}</span>
               </div>
-              <div className="flex justify-between items-center bg-emerald-50/50 p-2 rounded-lg pt-3">
-                <span className="font-bold text-emerald-700">Total Pago</span>
-                <span className="font-black text-emerald-600 text-sm">R$ {totalPago.toFixed(2)}</span>
+              <div className="rounded-xl bg-emerald-50 px-3 py-2.5 flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-700">Total pago</span>
+                <span className="font-black text-emerald-900">R$ {totalPago.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between items-center bg-rose-50/50 p-2 rounded-lg pt-3">
-                <span className="font-bold text-rose-700">A Receber</span>
-                <span className="font-black text-rose-600 text-sm">R$ {aReceber.toFixed(2)}</span>
+              <div className="rounded-xl bg-rose-50 px-3 py-2.5 flex items-center justify-between">
+                <span className="text-xs font-bold text-rose-700">A receber</span>
+                <span className="font-black text-rose-900">R$ {aReceber.toFixed(2)}</span>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <form onSubmit={handleSalvarFicha} className="bg-white border rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xs font-extrabold text-gray-800 uppercase tracking-wider">Ficha Cadastral</h3>
-              <button 
-                type="button" 
-                onClick={handleRemoverAluno} 
-                className="text-[10px] font-bold text-red-600 hover:underline border border-transparent hover:border-red-200 px-2 py-0.5 rounded"
-              >
-                Remover
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label htmlFor="cad-nome" className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Nome do Aluno *</label>
-                <input
-                  id="cad-nome"
-                  type="text"
-                  required
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className="w-full rounded-md border p-2 bg-white font-medium focus:outline-none focus:border-indigo-600"
-                />
+          {/* Ficha cadastral */}
+          <Card className="p-5">
+            <form onSubmit={handleSalvarFicha} className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                    <User className="size-5" />
+                  </div>
+                  <h2 className="font-extrabold text-sm">Ficha cadastral</h2>
+                </div>
+                <button type="button" onClick={handleRemoverAluno} className="text-[10px] font-bold text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors flex items-center gap-1">
+                  <Trash2 className="size-3" /> Remover
+                </button>
               </div>
 
-              <div>
-                <label htmlFor="cad-email" className="block text-[10px] font-bold uppercase text-gray-400 mb-1">E-mail</label>
-                <input
-                  id="cad-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-md border p-2 bg-white font-medium focus:outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="cad-telefone" className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Telefone</label>
-                <input
-                  id="cad-telefone"
-                  type="text"
-                  placeholder="Ex: 11999999999"
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
-                  className="w-full rounded-md border p-2 bg-white font-medium focus:outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              {/* CHECKBOX DO RESPONSÁVEL FINANCEIRO */}
-              <div className="flex items-center gap-2 pt-2 border-t border-dashed mt-2">
-                <input
-                  id="cad-responsavel"
-                  type="checkbox"
-                  checked={contatoResponsavel}
-                  onChange={(e) => setContatoResponsavel(e.target.checked)}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
-                />
-                <label htmlFor="cad-responsavel" className="text-[11px] font-bold text-gray-600 uppercase cursor-pointer select-none">
-                  O telefone pertence ao responsável (pai/mãe)
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="cad-nome">Nome</Label>
+                  <Input id="cad-nome" type="text" required value={nome} onChange={(e) => setNome(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="cad-email">E-mail</Label>
+                  <Input id="cad-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="cad-telefone">Telefone</Label>
+                  <Input id="cad-telefone" type="text" placeholder="11999999999" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
+                </div>
+                <label className="flex items-center gap-2 pt-2 border-t cursor-pointer select-none">
+                  <input
+                    id="cad-responsavel"
+                    type="checkbox"
+                    checked={contatoResponsavel}
+                    onChange={(e) => setContatoResponsavel(e.target.checked)}
+                    className="size-4 rounded border-[var(--color-input)] text-[var(--color-primary)] focus:ring-[var(--color-ring)]"
+                  />
+                  <span className="text-xs font-bold text-[var(--color-foreground)]/80">
+                    Telefone pertence ao responsável (pai/mãe)
+                  </span>
                 </label>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              className="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg text-xs hover:bg-indigo-700 transition-colors shadow-sm"
-            >
-              Salvar Alterações
-            </button>
-          </form>
+              <Button type="submit" size="md" className="w-full">
+                <Save className="size-4" /> Salvar alterações
+              </Button>
+            </form>
+          </Card>
         </div>
 
-        <div className="lg:col-span-2 space-y-6">
-          {alertaSucesso && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-4 text-xs font-bold shadow-sm animate-fade-in">
-              ✅ Dados cadastrais atualizados com sucesso no banco e na interface!
-            </div>
-          )}
-
-          <form onSubmit={handleAdicionarEvolucoes} className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider">Nova Evolução Diária (Prontuário)</h3>
-            
-            <div className="text-xs space-y-3">
+        {/* Coluna principal: nova evolução + timeline */}
+        <div className="lg:col-span-2 space-y-6 lg:order-2">
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="size-10 rounded-xl gradient-primary flex items-center justify-center shadow-md shadow-purple-500/25">
+                <Plus className="size-5 text-white" />
+              </div>
               <div>
-                <label htmlFor="evol-tipo" className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Tipo de Registro</label>
-                <select
-                  id="evol-tipo"
-                  value={tipoRegistro}
-                  onChange={(e) => setTipoRegistro(e.target.value)}
-                  className="w-full rounded-md border p-2 bg-white font-medium focus:outline-none focus:border-indigo-600 text-gray-700"
-                >
-                  <option value="Sessão Comum">Sessão Comum</option>
-                  <option value="Avaliação Física">Avaliação Física</option>
-                  <option value="Alta Clínica">Alta Clínica</option>
-                  <option value="Primeira Anamnese">Primeira Anamnese</option>
-                </select>
+                <h2 className="font-extrabold tracking-tight">Nova evolução diária</h2>
+                <p className="text-xs text-[var(--color-muted-foreground)]">Registre comportamentos, observações ou marcos</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAdicionarEvolucoes} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="evol-tipo">Tipo</Label>
+                  <Select id="evol-tipo" value={tipoRegistro} onChange={(e) => setTipoRegistro(e.target.value)}>
+                    <option value="Sessão Comum">Sessão Comum</option>
+                    <option value="Avaliação Física">Avaliação Física</option>
+                    <option value="Alta Clínica">Alta Clínica</option>
+                    <option value="Primeira Anamnese">Primeira Anamnese</option>
+                  </Select>
+                </div>
               </div>
 
-              <div>
-                <label htmlFor="evol-relatorio" className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Relatório da Sessão</label>
-                <textarea
+              <div className="space-y-1">
+                <Label htmlFor="evol-relatorio">Relatório</Label>
+                <Textarea
                   id="evol-relatorio"
                   rows={4}
                   required
-                  placeholder="Descreva o comportamento, evolução e observações da sessão de hoje..."
+                  placeholder="Descreva a sessão, comportamento e observações..."
                   value={relatorio}
                   onChange={(e) => setRelatorio(e.target.value)}
-                  className="w-full rounded-md border p-2 bg-white font-medium focus:outline-none focus:border-indigo-600"
                 />
               </div>
+
+              <div className="flex justify-end">
+                <Button type="submit"><FileText className="size-4" /> Registrar</Button>
+              </div>
+            </form>
+          </Card>
+
+          {/* Timeline */}
+          <Card className="overflow-hidden">
+            <div className="p-5 border-b border-[var(--color-border)] flex items-center justify-between">
+              <h2 className="font-extrabold tracking-tight">Linha do tempo</h2>
+              <Badge variant="outline">{evolucoes.length}</Badge>
             </div>
-
-            <button
-              type="submit"
-              className="bg-indigo-600 text-white font-bold px-6 py-2 rounded-lg text-xs hover:bg-indigo-700 transition-colors shadow-sm"
-            >
-              Registrar na Ficha
-            </button>
-          </form>
-
-          <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider">Linha do Tempo / Evoluções Gravadas</h3>
-            
-            <div className="space-y-4">
-              {evolucoes.length === 0 ? (
-                <p className="text-xs text-gray-400 italic">Nenhum registro clínico foi feito para este aluno ainda.</p>
-              ) : (
-                evolucoes.map((ev) => (
-                  <div key={ev.id} className="border-l-2 border-l-indigo-500 pl-4 py-1 text-xs space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-extrabold text-indigo-700 uppercase text-[10px] tracking-wider">{ev.tipo_registro}</span>
-                      <span className="text-[10px] text-gray-400 font-medium">
-                        {new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')}
-                      </span>
+            {evolucoes.length === 0 ? (
+              <div className="p-12 text-center">
+                <FileText className="size-10 mx-auto text-[var(--color-muted-foreground)] opacity-30 mb-3" />
+                <p className="text-sm text-[var(--color-muted-foreground)] italic">Nenhum registro clínico ainda.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[var(--color-border)]">
+                {evolucoes.map((ev) => (
+                  <div key={ev.id} className="p-5 flex gap-4 hover:bg-[var(--color-muted)]/30 transition-colors">
+                    <div className="flex flex-col items-center gap-2 shrink-0 w-1">
+                      <div className="size-3 rounded-full gradient-primary shadow-md shadow-purple-500/30 mt-1" />
+                      <div className="flex-1 w-px bg-purple-200/60" />
                     </div>
-                    <p className="text-gray-700 font-medium whitespace-pre-line leading-relaxed">{ev.relatorio}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <Badge variant="primary">{ev.tipo_registro}</Badge>
+                        <span className="text-[11px] text-[var(--color-muted-foreground)] flex items-center gap-1 font-medium">
+                          <Clock className="size-3" /> {new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                      <p className="text-sm text-[var(--color-foreground)]/85 whitespace-pre-line leading-relaxed mt-2">
+                        {ev.relatorio}
+                      </p>
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
-
       </div>
     </div>
   );

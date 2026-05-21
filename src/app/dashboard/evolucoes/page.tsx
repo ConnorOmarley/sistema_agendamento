@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { Search, FileText, User } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 interface EvolucaoGeral {
   id: string;
   data: string;
   tipo_registro: string;
   relatorio: string;
-  alunos: {
-    id: string;
-    nome: string;
-  } | null;
+  alunos: { id: string; nome: string } | null;
 }
 
 export default function EvolucoesGeral() {
@@ -25,85 +26,102 @@ export default function EvolucoesGeral() {
   useEffect(() => {
     async function carregarTodasEvolucoes() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/login');
-        return;
-      }
+      if (!session) { router.push('/login'); return; }
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('evolucoes')
-        .select(`
-          id,
-          data,
-          tipo_registro,
-          relatorio,
-          alunos (
-            id,
-            nome
-          )
-        `)
-        .order('created_at', { ascending: false });
+        .select(`id, data, tipo_registro, relatorio, alunos (id, nome)`)
+        .eq('user_id', session.user.id)
+        .order('data', { ascending: false });
 
-      if (!error && data) setEvolucoes(data as unknown as EvolucaoGeral[]);
+      if (data) setEvolucoes(data as unknown as EvolucaoGeral[]);
       setCarregando(false);
     }
-
     carregarTodasEvolucoes();
   }, [router]);
 
   const evolucoesFiltradas = evolucoes.filter((ev) => {
     const termo = busca.toLowerCase();
-    const nomeAluno = ev.alunos?.nome.toLowerCase() || '';
-    const textoRelatorio = ev.relatorio.toLowerCase() || '';
-    return nomeAluno.includes(termo) || textoRelatorio.includes(termo);
+    const nome = ev.alunos?.nome.toLowerCase() || '';
+    return nome.includes(termo) || ev.relatorio.toLowerCase().includes(termo);
   });
 
   if (carregando) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-gray-500 font-medium animate-pulse">Carregando histórico clínico...</p>
-      </div>
-    );
+    return <div className="flex items-center justify-center py-32 animate-pulse"><p className="text-[var(--color-muted-foreground)]">Carregando prontuários...</p></div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 pb-16">
-      <nav className="bg-white shadow-sm border-b px-8 py-4 flex justify-between items-center">
-        <div className="flex gap-8 items-center">
-          <Link href="/dashboard" className="text-sm font-bold text-indigo-600 hover:underline">← Voltar para Painel</Link>
-          <span className="text-gray-300">|</span>
-          <div className="flex gap-4 text-xs font-bold text-gray-500">
-            <Link href="/dashboard/agendamentos" className="hover:text-gray-900">Agenda</Link>
+    <div className="space-y-8 animate-fade-in">
+      <header className="space-y-1">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)]">Prontuários</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">📋 Evoluções clínicas</h1>
+        <p className="text-sm text-[var(--color-muted-foreground)]">Histórico completo de registros por aluno.</p>
+      </header>
+
+      <Card className="p-4 flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-[var(--color-muted-foreground)]" />
+          <Input
+            type="text"
+            placeholder="Buscar por aluno ou palavras-chave..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="text-xs text-[var(--color-muted-foreground)] font-medium pr-2 shrink-0">
+          <span className="text-lg font-black text-[var(--color-primary)] mr-1">{evolucoesFiltradas.length}</span>
+          {evolucoesFiltradas.length === 1 ? 'registro' : 'registros'}
+        </div>
+      </Card>
+
+      {/* Timeline */}
+      <div className="relative">
+        {evolucoesFiltradas.length === 0 ? (
+          <Card className="p-16 text-center">
+            <FileText className="size-12 mx-auto text-[var(--color-muted-foreground)] opacity-30 mb-3" />
+            <p className="text-sm text-[var(--color-muted-foreground)] italic">
+              {evolucoes.length === 0 ? 'Nenhuma evolução registrada ainda. Vá no perfil de um aluno para criar a primeira.' : 'Nenhum registro corresponde à busca.'}
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {evolucoesFiltradas.map((ev) => {
+              const [ano, mes, dia] = ev.data.split('-');
+              return (
+                <Card key={ev.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                  <div className="flex">
+                    <div className="gradient-primary text-white px-4 py-5 flex flex-col items-center justify-center shrink-0 w-20">
+                      <span className="text-[10px] uppercase font-bold opacity-90">{['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][parseInt(mes)-1]}</span>
+                      <span className="text-2xl font-black leading-none mt-0.5">{dia}</span>
+                      <span className="text-[10px] opacity-75 mt-0.5">{ano}</span>
+                    </div>
+                    <div className="p-5 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="size-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
+                            <User className="size-3.5" />
+                          </div>
+                          {ev.alunos ? (
+                            <Link href={`/dashboard/alunos/${ev.alunos.id}`} className="font-extrabold text-sm text-[var(--color-foreground)] hover:text-[var(--color-primary)] hover:underline">
+                              {ev.alunos.nome}
+                            </Link>
+                          ) : (
+                            <span className="text-sm text-[var(--color-muted-foreground)] italic">Aluno removido</span>
+                          )}
+                        </div>
+                        <Badge variant="primary">{ev.tipo_registro}</Badge>
+                      </div>
+                      <p className="text-sm text-[var(--color-foreground)]/85 whitespace-pre-wrap leading-relaxed">
+                        {ev.relatorio}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
-        </div>
-      </nav>
-
-      <div className="max-w-5xl mx-auto px-4 pt-8 space-y-6">
-        <div className="bg-white border rounded-xl p-4 shadow-sm flex justify-between items-center">
-          <input type="text" placeholder="🔍 Buscar por aluno ou palavras-chave..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" />
-          <p className="text-xs text-gray-500">Total: <span className="font-bold text-indigo-600">{evolucoesFiltradas.length}</span></p>
-        </div>
-
-        <div className="space-y-4">
-          {evolucoesFiltradas.map((ev) => {
-            const [ano, mes, dia] = ev.data.split('-');
-            return (
-              <div key={ev.id} className="bg-white border rounded-xl p-6 shadow-sm space-y-3">
-                <div className="flex justify-between border-b pb-2 text-xs">
-                  <div>
-                    <span className="text-gray-400 font-bold uppercase">Aluno:</span>{' '}
-                    {ev.alunos ? <Link href={`/dashboard/alunos/${ev.alunos.id}`} className="font-extrabold text-indigo-600 hover:underline">{ev.alunos.nome}</Link> : '—'}
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="px-2 py-0.5 rounded font-semibold bg-indigo-50 text-indigo-700">{ev.tipo_registro}</span>
-                    <span className="text-gray-400">{dia}/{mes}/{ano}</span>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border whitespace-pre-wrap">{ev.relatorio}</p>
-              </div>
-            );
-          })}
-        </div>
+        )}
       </div>
     </div>
   );

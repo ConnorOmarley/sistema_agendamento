@@ -1,9 +1,22 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import {
+  Users,
+  Wallet,
+  CalendarCheck2,
+  CheckCircle2,
+  XCircle,
+  Search,
+  Plus,
+  ChevronRight,
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import LembretesConsultas from '@/components/LembretesConsultas';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 interface Aluno {
   id: string;
@@ -23,16 +36,12 @@ interface Contadores {
 export default function DashboardPrincipal() {
   const router = useRouter();
   const [carregando, setCarregando] = useState(true);
-  const [userEmail, setUserEmail] = useState('');
+  const [nomeUsuario, setNomeUsuario] = useState('');
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [busca, setBusca] = useState('');
   const [nomeNovoAluno, setNomeNovoAluno] = useState('');
   const [metricas, setMetricas] = useState<Contadores>({
-    faturamentoPago: 0,
-    totalAlunos: 0,
-    agendados: 0,
-    concluidos: 0,
-    faltas: 0
+    faturamentoPago: 0, totalAlunos: 0, agendados: 0, concluidos: 0, faltas: 0,
   });
 
   useEffect(() => {
@@ -42,7 +51,8 @@ export default function DashboardPrincipal() {
         router.push('/login');
         return;
       }
-      setUserEmail(session.user.email || '');
+      const nome = session.user.user_metadata?.display_name || session.user.email?.split('@')[0] || 'Profissional';
+      setNomeUsuario(nome);
 
       const { data: listaAlunos } = await supabase
         .from('alunos')
@@ -72,7 +82,6 @@ export default function DashboardPrincipal() {
       });
       setCarregando(false);
     }
-
     carregarDashboardCompleto();
   }, [router]);
 
@@ -103,148 +112,164 @@ export default function DashboardPrincipal() {
 
   if (carregando) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-gray-500 font-medium animate-pulse">Carregando painel de controle...</p>
+      <div className="flex items-center justify-center py-32 animate-pulse">
+        <p className="text-[var(--color-muted-foreground)] font-medium">Carregando painel...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 pb-16">
-      {/* BARRA DE NAVEGAÇÃO SUPERIOR */}
-      <nav className="bg-white shadow-sm border-b px-8 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-8">
-          <span className="text-md font-black text-indigo-700 tracking-tight">SaaS Agendamento</span>
-          <div className="hidden md:flex gap-6 text-xs font-bold text-gray-500">
-            <Link href="/dashboard" className="text-indigo-600 border-b-2 border-indigo-600 pb-4 -mb-4">Alunos</Link>
-            <Link href="/dashboard/agendamentos" className="hover:text-gray-900 transition-colors">Agenda</Link>
-            <Link href="/dashboard/evolucoes" className="hover:text-gray-900 transition-colors">Prontuários</Link>
-            <Link href="/dashboard/fechamento" className="hover:text-indigo-600 transition-colors">📊 Fechamento</Link>
-            <Link href="/dashboard/configuracoes" className="hover:text-indigo-600 transition-colors">⚙️ Configurações</Link>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1.5 rounded-lg font-medium">{userEmail}</span>
-          <button
-            onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }}
-            className="text-xs font-bold text-red-600 hover:underline"
-          >
-            Sair
-          </button>
-        </div>
-      </nav>
+    <div className="space-y-8 animate-fade-in">
+      <header className="space-y-1">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)]">Painel de controle</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Olá, {nomeUsuario}! 👋</h1>
+        <p className="text-sm text-[var(--color-muted-foreground)]">
+          Aqui está o resumo do seu consultório hoje.
+        </p>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
-        <div>
-          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Gestão Estratégica</span>
-          <h2 className="text-xl font-extrabold text-gray-900 mt-0.5">Indicadores do Consultório</h2>
-        </div>
+      {/* Métricas */}
+      <section className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <MetricaCard
+          gradient="gradient-emerald"
+          icon={<Wallet className="size-5" />}
+          label="Faturamento Pago"
+          valor={`R$ ${metricas.faturamentoPago.toFixed(2)}`}
+          highlight
+        />
+        <MetricaCard
+          icon={<Users className="size-5 text-purple-600" />}
+          label="Alunos"
+          valor={metricas.totalAlunos}
+        />
+        <MetricaCard
+          icon={<CalendarCheck2 className="size-5 text-sky-600" />}
+          label="Agendados"
+          valor={metricas.agendados}
+        />
+        <MetricaCard
+          icon={<CheckCircle2 className="size-5 text-emerald-600" />}
+          label="Concluídos"
+          valor={metricas.concluidos}
+        />
+        <MetricaCard
+          icon={<XCircle className="size-5 text-rose-600" />}
+          label="Faltas"
+          valor={metricas.faltas}
+        />
+      </section>
 
-        {/* MÉTRICAS DO TOPO */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-emerald-600 text-white rounded-xl p-5 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider block">💰 Faturamento Confirmado</span>
-            <span className="text-2xl font-black block mt-2">R$ {metricas.faturamentoPago.toFixed(2)}</span>
+      {/* Grid principal */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2 overflow-hidden">
+          <div className="p-6 border-b border-[var(--color-border)] flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+            <div>
+              <h2 className="text-lg font-extrabold tracking-tight">📚 Meus alunos</h2>
+              <p className="text-xs text-[var(--color-muted-foreground)]">Fichas cadastrais e perfis</p>
+            </div>
+            <form onSubmit={handleCriarAluno} className="flex gap-2 w-full sm:w-auto">
+              <Input
+                type="text"
+                placeholder="Nome do novo aluno..."
+                value={nomeNovoAluno}
+                onChange={(e) => setNomeNovoAluno(e.target.value)}
+                className="sm:w-56"
+                required
+              />
+              <Button type="submit" size="md">
+                <Plus className="size-4" />
+                Novo
+              </Button>
+            </form>
           </div>
-          <div className="bg-white border rounded-xl p-5 shadow-sm">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Alunos</span>
-            <span className="text-2xl font-black text-gray-800 block mt-2">{metricas.totalAlunos}</span>
-          </div>
-          <div className="bg-white border rounded-xl p-5 shadow-sm border-l-4 border-l-blue-500">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Agendados</span>
-            <span className="text-2xl font-black text-gray-800 block mt-2">{metricas.agendados}</span>
-          </div>
-          <div className="bg-white border rounded-xl p-5 shadow-sm border-l-4 border-l-green-500">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Concluídos</span>
-            <span className="text-2xl font-black text-gray-800 block mt-2">{metricas.concluidos}</span>
-          </div>
-          <div className="bg-white border rounded-xl p-5 shadow-sm border-l-4 border-l-red-500">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Faltas</span>
-            <span className="text-2xl font-black text-gray-800 block mt-2">{metricas.faltas}</span>
-          </div>
-        </div>
 
-        {/* GRID PRINCIPAL: FICHAS + LEMBRETES */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* COLUNA PRINCIPAL — Fichas Cadastrais */}
-          <div className="lg:col-span-2">
-            <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-              <div className="p-6 border-b flex flex-col sm:flex-row justify-between items-center gap-4">
-                <h3 className="text-lg font-bold text-gray-900">Fichas Cadastrais</h3>
-                <form onSubmit={handleCriarAluno} className="w-full sm:w-auto flex gap-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nome do novo aluno..."
-                    value={nomeNovoAluno}
-                    onChange={(e) => setNomeNovoAluno(e.target.value)}
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500 w-full sm:w-64"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 text-white font-bold px-4 py-1.5 rounded-lg text-xs hover:bg-indigo-700 transition-colors shadow-sm whitespace-nowrap"
-                  >
-                    + Novo Aluno
-                  </button>
-                </form>
-              </div>
-              <div className="px-6 py-3 bg-gray-50 border-b">
-                <input
-                  type="text"
-                  placeholder="🔍 Buscar aluno cadastrado..."
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  className="max-w-md w-full rounded-lg border bg-white border-gray-300 px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-gray-50 border-b text-gray-400 font-bold uppercase tracking-wider">
-                      <th className="px-6 py-3.5">Nome do Aluno</th>
-                      <th className="px-6 py-3.5">E-mail</th>
-                      <th className="px-6 py-3.5">Telefone</th>
-                      <th className="px-6 py-3.5 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 text-gray-700">
-                    {alunosFiltrados.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-8 text-center text-gray-400 italic">
-                          Nenhum registro encontrado correspondente aos filtros.
-                        </td>
-                      </tr>
-                    ) : (
-                      alunosFiltrados.map((aluno) => (
-                        <tr key={aluno.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 font-bold text-indigo-600">{aluno.nome}</td>
-                          <td className="px-6 py-4 text-gray-500">{aluno.email || '—'}</td>
-                          <td className="px-6 py-4 text-gray-500">{aluno.telefone || '—'}</td>
-                          <td className="px-6 py-4 text-right">
-                            <Link
-                              href={`/dashboard/alunos/${aluno.id}`}
-                              className="bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 font-bold px-3 py-1 rounded-md border transition-all inline-block"
-                            >
-                              Ver Perfil
-                            </Link>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-muted)]/40">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-[var(--color-muted-foreground)]" />
+              <Input
+                type="text"
+                placeholder="Buscar por nome ou e-mail..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="pl-10"
+              />
             </div>
           </div>
 
-          {/* COLUNA LATERAL — Lembretes */}
-          <div className="space-y-6">
-            <LembretesConsultas />
+          <div className="divide-y divide-[var(--color-border)]">
+            {alunosFiltrados.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <Users className="size-10 text-[var(--color-muted-foreground)] mx-auto mb-3 opacity-40" />
+                <p className="text-sm text-[var(--color-muted-foreground)] italic">
+                  {alunos.length === 0
+                    ? 'Nenhum aluno cadastrado ainda. Adicione o primeiro acima!'
+                    : 'Nenhum aluno corresponde à busca.'}
+                </p>
+              </div>
+            ) : (
+              alunosFiltrados.map((aluno) => (
+                <Link
+                  key={aluno.id}
+                  href={`/dashboard/alunos/${aluno.id}`}
+                  className="flex items-center gap-4 px-6 py-4 hover:bg-[var(--color-muted)]/50 transition-colors group"
+                >
+                  <div className="size-10 rounded-xl gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md shadow-purple-500/20 shrink-0">
+                    {aluno.nome.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-[var(--color-foreground)] truncate">{aluno.nome}</p>
+                    <p className="text-xs text-[var(--color-muted-foreground)] truncate">
+                      {aluno.email || aluno.telefone || 'Sem contato cadastrado'}
+                    </p>
+                  </div>
+                  <ChevronRight className="size-5 text-[var(--color-muted-foreground)] group-hover:text-[var(--color-primary)] group-hover:translate-x-1 transition-all" />
+                </Link>
+              ))
+            )}
           </div>
+        </Card>
 
+        <div className="space-y-6">
+          <LembretesConsultas />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MetricaCard({
+  icon, label, valor, gradient, highlight,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  valor: string | number;
+  gradient?: string;
+  highlight?: boolean;
+}) {
+  if (highlight && gradient) {
+    return (
+      <div className={`${gradient} col-span-2 lg:col-span-1 rounded-2xl p-5 text-white shadow-lg shadow-emerald-500/20 flex flex-col gap-2`}>
+        <div className="flex items-center justify-between">
+          <div className="size-9 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
+            {icon}
+          </div>
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider opacity-90">{label}</p>
+          <p className="text-2xl font-black mt-1">{valor}</p>
         </div>
       </div>
-    </div>
+    );
+  }
+  return (
+    <Card className="p-5 flex flex-col gap-2">
+      <div className="size-9 rounded-xl bg-[var(--color-muted)] flex items-center justify-center">
+        {icon}
+      </div>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-muted-foreground)]">{label}</p>
+        <p className="text-2xl font-black mt-1">{valor}</p>
+      </div>
+    </Card>
   );
 }
