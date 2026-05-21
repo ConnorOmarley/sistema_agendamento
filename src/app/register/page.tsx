@@ -11,7 +11,11 @@ import { supabase } from '@/lib/supabase';
 const registerSchema = z.object({
   nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres'),
   email: z.string().email('Insira um e-mail válido'),
-  senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres'),
+  senha: z.string()
+    .min(8, 'A senha deve ter pelo menos 8 caracteres')
+    .regex(/[a-zA-Z]/, 'A senha deve conter pelo menos uma letra')
+    .regex(/[0-9]/, 'A senha deve conter pelo menos um número')
+    .regex(/[^a-zA-Z0-9]/, 'A senha deve conter pelo menos um caractere especial'),
   confirmarSenha: z.string()
 }).refine((data) => data.senha === data.confirmarSenha, {
   message: "As senhas não coincidem",

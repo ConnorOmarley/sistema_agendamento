@@ -5,11 +5,25 @@ import { supabase } from '@/lib/supabase';
 
 interface AgendamentoAmanha {
   id: string;
-  hora: string;
+  horario: string;
   alunoId: string;
   nomeAluno: string;
   telefoneAluno: string | null;
   contatoResponsavel: boolean;
+}
+
+// Retorna a data YYYY-MM-DD em America/Sao_Paulo, evitando o bug
+// de toISOString() que usa UTC e troca o dia entre 21h-00h horário BR.
+function dataBrasilPlusDias(dias: number): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const base = new Date();
+  base.setDate(base.getDate() + dias);
+  return fmt.format(base);
 }
 
 export default function LembretesConsultas() {
@@ -22,17 +36,13 @@ export default function LembretesConsultas() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    // Calcular a data de amanhã no formato YYYY-MM-DD
-    const amanha = new Date();
-    amanha.setDate(amanha.getDate() + 1);
-    const dataAmanhaFormatada = amanha.toISOString().split('T')[0];
+    const dataAmanhaFormatada = dataBrasilPlusDias(1);
 
-    // Busca agendamentos de amanhã que não foram cancelados ou marcados como falta
     const { data: listaAgendamentos } = await supabase
       .from('agendamentos')
       .select(`
         id,
-        hora,
+        horario,
         aluno_id,
         alunos (
           nome,
@@ -45,18 +55,22 @@ export default function LembretesConsultas() {
       .not('status', 'eq', 'Faltou');
 
     if (listaAgendamentos) {
-      // Mapeia e tipa os dados retornados do JOIN do Supabase
-      const mapeados: AgendamentoAmanha[] = listaAgendamentos.map((ag: any) => ({
+      type AgRaw = {
+        id: string;
+        horario: string | null;
+        aluno_id: string;
+        alunos: { nome: string; telefone: string | null; contato_responsavel: boolean } | null;
+      };
+      const mapeados: AgendamentoAmanha[] = (listaAgendamentos as unknown as AgRaw[]).map((ag) => ({
         id: ag.id,
-        hora: ag.hora ? ag.hora.substring(0, 5) : '--:--',
+        horario: ag.horario ? ag.horario.substring(0, 5) : '--:--',
         alunoId: ag.aluno_id,
         nomeAluno: ag.alunos?.nome || 'Aluno Removido',
         telefoneAluno: ag.alunos?.telefone || null,
         contatoResponsavel: ag.alunos?.contato_responsavel || false,
       }));
 
-      // Ordena por horário da sessão
-      mapeados.sort((a, b) => a.hora.localeCompare(b.hora));
+      mapeados.sort((a, b) => a.horario.localeCompare(b.horario));
       setAgendamentos(mapeados);
     }
     setCarregando(false);
@@ -72,10 +86,9 @@ export default function LembretesConsultas() {
       return;
     }
 
-    // Lógica de saudação contextualizada (Aluno vs Responsável)
     const msg = ag.contatoResponsavel
-      ? `Olá! Passando para lembrar da sessão de *${ag.nomeAluno}* amanhã, às *${ag.hora}*. Confirmado?`
-      : `Olá, *${ag.nomeAluno}*! Passando para lembrar da nossa sessão amanhã, às *${ag.hora}*. Confirmado?`;
+      ? `Olá! Passando para lembrar da sessão de *${ag.nomeAluno}* amanhã, às *${ag.horario}*. Confirmado?`
+      : `Olá, *${ag.nomeAluno}*! Passando para lembrar da nossa sessão amanhã, às *${ag.horario}*. Confirmado?`;
 
     const numeroLimpo = ag.telefoneAluno.replace(/\D/g, '');
     const numeroFormatado = numeroLimpo.length === 11 ? `55${numeroLimpo}` : numeroLimpo;
@@ -123,7 +136,7 @@ export default function LembretesConsultas() {
               <div className="text-xs space-y-0.5 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px]">
-                    {ag.hora}
+                    {ag.horario}
                   </span>
                   <p className="font-bold text-gray-900 truncate">{ag.nomeAluno}</p>
                 </div>

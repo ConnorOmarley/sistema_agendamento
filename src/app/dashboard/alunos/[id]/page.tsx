@@ -15,7 +15,7 @@ interface Aluno {
 
 interface Evolucao {
   id: string;
-  data_registro: string;
+  data: string;
   tipo_registro: string;
   relatorio: string;
 }
@@ -79,12 +79,12 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
     setTelefone(dadosAluno.telefone || '');
     setContatoResponsavel(dadosAluno.contato_responsavel || false);
 
-    // Busca histórico de evoluções
     const { data: listaEvolucoes } = await supabase
-      .from('evolucoes_aluno')
-      .select('id, data_registro, tipo_registro, relatorio')
+      .from('evolucoes')
+      .select('id, data, tipo_registro, relatorio')
       .eq('aluno_id', alunoId)
-      .order('data_registro', { ascending: false });
+      .eq('user_id', session.user.id)
+      .order('data', { ascending: false });
 
     setEvolucoes(listaEvolucoes || []);
 
@@ -155,14 +155,14 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
     if (!session) return;
 
     const { data: novaEvolucao, error } = await supabase
-      .from('evolucoes_aluno')
+      .from('evolucoes')
       .insert([{
         aluno_id: alunoId,
         user_id: session.user.id,
         tipo_registro: tipoRegistro,
         relatorio: relatorio.trim()
       }])
-      .select()
+      .select('id, data, tipo_registro, relatorio')
       .single();
 
     if (!error && novaEvolucao) {
@@ -288,7 +288,7 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
                 <label htmlFor="cad-email" className="block text-[10px] font-bold uppercase text-gray-400 mb-1">E-mail</label>
                 <input
                   id="cad-email"
-                  type="column"
+                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-md border p-2 bg-white font-medium focus:outline-none focus:border-indigo-600"
@@ -391,7 +391,7 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
                     <div className="flex justify-between items-center">
                       <span className="font-extrabold text-indigo-700 uppercase text-[10px] tracking-wider">{ev.tipo_registro}</span>
                       <span className="text-[10px] text-gray-400 font-medium">
-                        {new Date(ev.data_registro).toLocaleDateString('pt-BR')}
+                        {new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')}
                       </span>
                     </div>
                     <p className="text-gray-700 font-medium whitespace-pre-line leading-relaxed">{ev.relatorio}</p>
