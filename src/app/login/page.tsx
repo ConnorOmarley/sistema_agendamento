@@ -1,16 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Eye, EyeOff, Sparkles, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Sparkles, Mail, Lock, ArrowRight, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { checkThrottle, recordFailure, clearThrottle } from '@/lib/login-throttle';
 
 const loginSchema = z.object({
   email: z.string().email('Insira um e-mail válido'),
@@ -22,16 +23,51 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function Login() {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
+  const [bloqueio, setBloqueio] = useState<{ remainingMs: number; remainingLabel: string } | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [verSenha, setVerSenha] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
+  const emailDigitado = watch('email');
+
+  // Verifica bloqueio enquanto o usuário digita o e-mail.
+  useEffect(() => {
+    if (!emailDigitado || !emailDigitado.includes('@')) {
+      setBloqueio(null);
+      return;
+    }
+    const check = checkThrottle(emailDigitado);
+    setBloqueio(check.locked ? { remainingMs: check.remainingMs, remainingLabel: check.remainingLabel } : null);
+  }, [emailDigitado]);
+
+  // Countdown visual enquanto bloqueado.
+  useEffect(() => {
+    if (!bloqueio) return;
+    const t = setInterval(() => {
+      const check = checkThrottle(emailDigitado);
+      if (!check.locked) {
+        setBloqueio(null);
+        clearInterval(t);
+      } else {
+        setBloqueio({ remainingMs: check.remainingMs, remainingLabel: check.remainingLabel });
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [bloqueio, emailDigitado]);
 
   async function handleLogin(data: LoginFormData) {
-    setCarregando(true);
     setErro(null);
+
+    const pre = checkThrottle(data.email);
+    if (pre.locked) {
+      setBloqueio({ remainingMs: pre.remainingMs, remainingLabel: pre.remainingLabel });
+      setErro(`Muitas tentativas falhadas. Aguarde ${pre.remainingLabel} antes de tentar de novo.`);
+      return;
+    }
+
+    setCarregando(true);
 
     const { error } = await supabase.auth.signInWithPassword({
       email: data.email,
@@ -39,6 +75,7 @@ export default function Login() {
     });
 
     if (error) {
+      const apos = recordFailure(data.email);
       if (error.message === 'Invalid login credentials') {
         setErro('E-mail ou senha incorretos.');
       } else if (error.message === 'Email not confirmed') {
@@ -46,10 +83,15 @@ export default function Login() {
       } else {
         setErro(error.message);
       }
+      if (apos.locked) {
+        setBloqueio({ remainingMs: apos.remainingMs, remainingLabel: apos.remainingLabel });
+        setErro(`Muitas tentativas falhadas. Aguarde ${apos.remainingLabel} para tentar de novo.`);
+      }
       setCarregando(false);
       return;
     }
 
+    clearThrottle(data.email);
     router.push('/dashboard');
     router.refresh();
   }
@@ -70,7 +112,19 @@ export default function Login() {
         </div>
 
         <div className="glass-card rounded-3xl border border-white/40 shadow-2xl shadow-purple-900/10 p-8 space-y-6">
-          {erro && (
+          {bloqueio && (
+            <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm font-medium text-amber-800 animate-fade-in flex items-start gap-3">
+              <ShieldAlert className="size-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Acesso temporariamente bloqueado</p>
+                <p className="text-xs mt-0.5 opacity-90">
+                  Detectamos várias tentativas falhadas. Aguarde <strong>{bloqueio.remainingLabel}</strong> antes de tentar novamente.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {erro && !bloqueio && (
             <div className="rounded-2xl bg-rose-50 border border-rose-100 p-4 text-sm font-medium text-rose-700 animate-fade-in">
               {erro}
             </div>
@@ -124,10 +178,14 @@ export default function Login() {
             <Button
               type="submit"
               size="lg"
-              disabled={carregando}
+              disabled={carregando || !!bloqueio}
               className="w-full"
             >
-              {carregando ? 'Entrando...' : <>Entrar <ArrowRight className="size-4" /></>}
+              {bloqueio
+                ? `Aguarde ${bloqueio.remainingLabel}`
+                : carregando
+                ? 'Entrando...'
+                : <>Entrar <ArrowRight className="size-4" /></>}
             </Button>
           </form>
         </div>

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createProxyClient } from '@/lib/supabase-server';
 
 const PROTECTED_PREFIXES = ['/dashboard'];
-const AUTH_PAGES = ['/login', '/register'];
+// Páginas só acessíveis quando deslogado (logado é redirecionado para o dashboard).
+const AUTH_PAGES = ['/login', '/register', '/forgot-password'];
+// /reset-password é especial: o usuário PRECISA estar com sessão temporária do link.
+// Não bloqueia logado nem deslogado — deixa a página decidir.
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
