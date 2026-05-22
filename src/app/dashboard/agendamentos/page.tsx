@@ -53,6 +53,7 @@ export default function AgendaGeral() {
 
   const [horariosOcupadosNoDia, setHorariosOcupadosNoDia] = useState<string[]>([]);
   const [modoManual, setModoManual] = useState(false);
+  const [erroForm, setErroForm] = useState<string | null>(null);
 
   async function carregarDadosAgenda() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -62,6 +63,7 @@ export default function AgendaGeral() {
       .from('alunos')
       .select('id, nome')
       .eq('user_id', session.user.id)
+      .is('deleted_at', null)
       .order('nome', { ascending: true });
 
     if (listaAlunos) setAlunos(listaAlunos);
@@ -91,6 +93,8 @@ export default function AgendaGeral() {
   async function handleCriarAgendamento(e: React.FormEvent) {
     e.preventDefault();
     if (!alunoSelecionado || !dataSessao || !horarioSessao) return;
+    setErroForm(null);
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
@@ -105,10 +109,18 @@ export default function AgendaGeral() {
       observacoes: obsSessao.trim() || null
     }]);
 
-    if (!error) {
-      setAlunoSelecionado(''); setDataSessao(''); setHorarioSessao(''); setObsSessao(''); setModoManual(false);
-      carregarDadosAgenda();
+    if (error) {
+      // Postgres 23505 = unique_violation (UNIQUE INDEX uniq_agendamentos_slot)
+      if (error.code === '23505') {
+        setErroForm('Já existe outro agendamento ativo neste mesmo dia e horário. Cancele o anterior ou escolha outro horário.');
+      } else {
+        setErroForm('Não foi possível criar o agendamento. Tente novamente.');
+      }
+      return;
     }
+
+    setAlunoSelecionado(''); setDataSessao(''); setHorarioSessao(''); setObsSessao(''); setModoManual(false);
+    carregarDadosAgenda();
   }
 
   async function atualizarAgendamento(id: string, campo: 'status' | 'status_pagamento', valor: string) {
@@ -148,6 +160,12 @@ export default function AgendaGeral() {
           </div>
 
           <form onSubmit={handleCriarAgendamento} className="space-y-4">
+            {erroForm && (
+              <div className="rounded-xl bg-rose-50 border border-rose-100 p-3 text-xs font-medium text-rose-700 animate-fade-in">
+                {erroForm}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="select-aluno">Aluno *</Label>
               <Select id="select-aluno" required value={alunoSelecionado} onChange={(e) => setAlunoSelecionado(e.target.value)}>

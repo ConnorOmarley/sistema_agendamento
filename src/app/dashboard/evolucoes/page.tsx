@@ -32,6 +32,7 @@ export default function EvolucoesGeral() {
         .from('evolucoes')
         .select(`id, data, tipo_registro, relatorio, alunos (id, nome)`)
         .eq('user_id', session.user.id)
+        .is('deleted_at', null)
         .order('data', { ascending: false });
 
       if (data) setEvolucoes(data as unknown as EvolucaoGeral[]);

@@ -58,6 +58,7 @@ export default function DashboardPrincipal() {
         .from('alunos')
         .select('id, nome, email, telefone')
         .eq('user_id', session.user.id)
+        .is('deleted_at', null)
         .order('nome', { ascending: true });
 
       const { data: listaAgendamentos } = await supabase

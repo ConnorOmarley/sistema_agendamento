@@ -65,7 +65,9 @@ export default function FechamentoMensal() {
 
     const { data: listaAlunos } = await supabase
       .from('alunos').select('id, nome, telefone, contato_responsavel')
-      .eq('user_id', session.user.id).order('nome', { ascending: true });
+      .eq('user_id', session.user.id)
+      .is('deleted_at', null)
+      .order('nome', { ascending: true });
 
     const { data: listaAgendamentos } = await supabase
       .from('agendamentos').select('id, aluno_id, data, valor_sessao, status, status_pagamento')

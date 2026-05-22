@@ -15,6 +15,7 @@ import {
   User,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { registrarAuditoria } from '@/lib/audit-log';
 import { Card } from '@/components/ui/card';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -87,9 +88,13 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
       .select('id, data, tipo_registro, relatorio')
       .eq('aluno_id', alunoId)
       .eq('user_id', session.user.id)
+      .is('deleted_at', null)
       .order('data', { ascending: false });
 
     setEvolucoes(listaEvolucoes || []);
+
+    // LGPD: registra acesso ao prontuário do aluno (visualização de dados clínicos)
+    registrarAuditoria({ acao: 'view', entidade: 'aluno', entidadeId: alunoId });
 
     const { data: agendamentos } = await supabase
       .from('agendamentos')
@@ -150,13 +155,37 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
     if (!error && nova) {
       setEvolucoes(atual => [nova, ...atual]);
       setRelatorio('');
+      // LGPD: registra criação de prontuário
+      registrarAuditoria({
+        acao: 'create',
+        entidade: 'evolucao',
+        entidadeId: nova.id,
+        detalhes: { aluno_id: alunoId, tipo_registro: tipoRegistro },
+      });
     }
   }
 
   async function handleRemoverAluno() {
-    if (!confirm(`Tem certeza absoluta que deseja remover a ficha de ${aluno?.nome}? Todos os registros serão apagados.`)) return;
-    const { error } = await supabase.from('alunos').delete().eq('id', alunoId);
-    if (!error) router.push('/dashboard');
+    if (!confirm(`Tem certeza que deseja remover a ficha de ${aluno?.nome}? A ficha ficará arquivada (soft delete) e poderá ser recuperada por suporte se necessário.`)) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    // Soft delete: marca como apagado, mas não remove do banco (LGPD + recuperação)
+    const { error } = await supabase
+      .from('alunos')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', alunoId)
+      .eq('user_id', session.user.id);
+
+    if (!error) {
+      registrarAuditoria({
+        acao: 'delete',
+        entidade: 'aluno',
+        entidadeId: alunoId,
+        detalhes: { nome: aluno?.nome },
+      });
+      router.push('/dashboard');
+    }
   }
 
   if (carregando) {
