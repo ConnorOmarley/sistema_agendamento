@@ -12,8 +12,10 @@ import {
   X,
   Receipt,
   Users,
+  FileDown,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { gerarReciboPDF } from '@/lib/pdf-recibo';
 import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -41,6 +43,19 @@ export default function FechamentoMensal() {
   const [diaCobrancaPadrao, setDiaCobrancaPadrao] = useState(5);
   const [chavePixPadrao, setChavePixPadrao] = useState('');
   const [modeloMsgCobranca, setModeloMsgCobranca] = useState('');
+  const [configRecibo, setConfigRecibo] = useState<{
+    razao_social?: string | null;
+    cnpj?: string | null;
+    inscricao_municipal?: string | null;
+    regime_tributario?: string | null;
+    chave_pix?: string | null;
+    aliquota_imposto?: number | null;
+  }>({});
+  const [emailProfissional, setEmailProfissional] = useState('');
+  const [agendamentosCompletos, setAgendamentosCompletos] = useState<{
+    id: string; aluno_id: string; data: string; horario: string;
+    valor_sessao: number; status: string; status_pagamento: 'Pago' | 'Pendente';
+  }[]>([]);
 
   const [modoLoteAtivo, setModoLoteAtivo] = useState(false);
   const [alunoIdFocoAtual, setAlunoIdFocoAtual] = useState<string | null>(null);
@@ -51,9 +66,11 @@ export default function FechamentoMensal() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.push('/login'); return; }
 
+    setEmailProfissional(session.user.email || '');
+
     const { data: config } = await supabase
       .from('configuracoes_usuario')
-      .select('dia_cobranca_padrao, chave_pix, mensagem_cobranca')
+      .select('dia_cobranca_padrao, chave_pix, mensagem_cobranca, razao_social, cnpj, inscricao_municipal, regime_tributario, aliquota_imposto')
       .eq('user_id', session.user.id)
       .single();
 
@@ -61,6 +78,14 @@ export default function FechamentoMensal() {
       setDiaCobrancaPadrao(config.dia_cobranca_padrao || 5);
       setChavePixPadrao(config.chave_pix || 'Não configurada');
       setModeloMsgCobranca(config.mensagem_cobranca || '');
+      setConfigRecibo({
+        razao_social: config.razao_social,
+        cnpj: config.cnpj,
+        inscricao_municipal: config.inscricao_municipal,
+        regime_tributario: config.regime_tributario,
+        chave_pix: config.chave_pix,
+        aliquota_imposto: config.aliquota_imposto,
+      });
     }
 
     const { data: listaAlunos } = await supabase
@@ -70,8 +95,20 @@ export default function FechamentoMensal() {
       .order('nome', { ascending: true });
 
     const { data: listaAgendamentos } = await supabase
-      .from('agendamentos').select('id, aluno_id, data, valor_sessao, status, status_pagamento')
+      .from('agendamentos').select('id, aluno_id, data, horario, valor_sessao, status, status_pagamento')
       .eq('user_id', session.user.id);
+
+    setAgendamentosCompletos(
+      (listaAgendamentos || []).map(ag => ({
+        id: ag.id,
+        aluno_id: ag.aluno_id,
+        data: ag.data,
+        horario: ag.horario,
+        valor_sessao: Number(ag.valor_sessao) || 0,
+        status: ag.status,
+        status_pagamento: ag.status_pagamento as 'Pago' | 'Pendente',
+      }))
+    );
 
     if (!listaAlunos) { setCarregando(false); return; }
 
@@ -143,6 +180,19 @@ export default function FechamentoMensal() {
     const primeiro = faturas.find(f => f.valorTotal > 0 && f.statusFinal !== 'Pago' && f.telefoneAluno);
     if (!primeiro) { alert('Não há faturas pendentes com telefone configurado.'); return; }
     setModoLoteAtivo(true); setAlunoIdFocoAtual(primeiro.alunoId);
+  };
+
+  const gerarRecibo = (fat: FaturaAluno) => {
+    const sessoesDoAluno = agendamentosCompletos.filter(
+      ag => ag.aluno_id === fat.alunoId && ag.data.startsWith(mesAnoSelecionado) && ag.status !== 'Faltou'
+    );
+    gerarReciboPDF({
+      nomeAluno: fat.nomeAluno,
+      mesAno: mesAnoSelecionado,
+      sessoes: sessoesDoAluno,
+      config: configRecibo,
+      emailProfissional,
+    });
   };
 
   return (
@@ -285,6 +335,17 @@ export default function FechamentoMensal() {
                       >
                         <Eye className="size-4 text-[var(--color-muted-foreground)]" />
                       </Link>
+
+                      {fat.totalSessoes > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => gerarRecibo(fat)}
+                          title="Gerar recibo PDF"
+                          className="size-9 rounded-xl border border-[var(--color-border)] bg-white hover:bg-violet-50 hover:border-violet-300 flex items-center justify-center transition-colors"
+                        >
+                          <FileDown className="size-4 text-violet-500" />
+                        </button>
+                      )}
 
                       {fat.valorTotal > 0 && fat.statusFinal !== 'Pago' && (
                         <button

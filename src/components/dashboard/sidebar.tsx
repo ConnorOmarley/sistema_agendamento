@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   X,
+  Trash2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,7 @@ const NAV = [
   { href: '/dashboard/evolucoes', label: 'Prontuários', icon: FileText },
   { href: '/dashboard/fechamento', label: 'Fechamento', icon: Receipt },
   { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
+  { href: '/dashboard/lixeira', label: 'Lixeira', icon: Trash2 },
 ];
 
 export function Sidebar() {
