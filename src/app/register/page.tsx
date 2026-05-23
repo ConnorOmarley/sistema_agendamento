@@ -15,11 +15,7 @@ import { Label } from '@/components/ui/label';
 const registerSchema = z.object({
   nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres'),
   email: z.string().email('Insira um e-mail válido'),
-  senha: z.string()
-    .min(8, 'A senha deve ter pelo menos 8 caracteres')
-    .regex(/[a-zA-Z]/, 'A senha deve conter pelo menos uma letra')
-    .regex(/[0-9]/, 'A senha deve conter pelo menos um número')
-    .regex(/[^a-zA-Z0-9]/, 'A senha deve conter pelo menos um caractere especial'),
+  senha: z.string().min(8, 'A senha deve ter pelo menos 8 caracteres'),
   confirmarSenha: z.string()
 }).refine((data) => data.senha === data.confirmarSenha, {
   message: "As senhas não coincidem",
@@ -179,7 +175,7 @@ export default function Register() {
               </div>
               {errors.senha && <p className="text-xs font-medium text-rose-600">{errors.senha.message}</p>}
               <p className="text-[10px] text-[var(--color-muted-foreground)] mt-1">
-                Mín. 8 caracteres • letra • número • caractere especial
+                Use 8 caracteres ou mais com uma mistura de letras, números e símbolos.
               </p>
             </div>
 
