@@ -148,14 +148,14 @@ export default function TermosDeUso() {
             <h2 className="text-lg font-extrabold">12. Contato</h2>
             <p>
               Dúvidas sobre estes Termos? Escreva para{' '}
-              <strong>contato@acompanha.com.br</strong> (substitua pelo seu e-mail oficial).
+              <strong>alberttcarlosu.u@gmail.com</strong>.
             </p>
           </section>
 
           <p className="text-[11px] italic text-[var(--color-muted-foreground)] pt-4 border-t">
-            ⚠️ Este texto é um modelo inicial. Antes de operar comercialmente, recomendamos
-            revisão por advogado especializado em direito digital e LGPD, ou substituição por
-            documento gerado em serviços como iubenda.com ou termly.io.
+            Estes Termos estão na versão 1.0, vigente desde 23/05/2026. Recomendamos revisão
+            periódica por profissional especializado em direito digital conforme o serviço
+            evolui e ganha mais usuários.
           </p>
         </article>
       </div>

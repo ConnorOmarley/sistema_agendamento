@@ -47,8 +47,8 @@ export default function PoliticaPrivacidade() {
             <p>
               O <strong>Acompanha</strong> é um serviço de software como serviço (SaaS) para
               profissionais de pedagogia e psicopedagogia gerenciarem agenda, alunos, evoluções
-              clínicas e cobrança. Operado por [SEU NOME / RAZÃO SOCIAL], CNPJ [SEU CNPJ],
-              localizado em [SUA CIDADE/ESTADO].
+              clínicas e cobrança. Operado por Carlos Alberto De Moura Chagas (pessoa física),
+              CPF 718.222.384-80, localizado em Recife/PE.
             </p>
           </section>
 
@@ -56,8 +56,8 @@ export default function PoliticaPrivacidade() {
             <h2 className="text-lg font-extrabold">2. Encarregado pelo Tratamento de Dados (DPO)</h2>
             <p>
               Para questões relacionadas a privacidade e LGPD, contate:<br />
-              <strong>E-mail:</strong> dpo@acompanha.com.br (substitua pelo seu e-mail)<br />
-              <strong>Responsável:</strong> [SEU NOME]
+              <strong>E-mail:</strong> alberttcarlosu.u@gmail.com<br />
+              <strong>Responsável:</strong> Carlos Alberto De Moura Chagas
             </p>
           </section>
 
@@ -123,7 +123,7 @@ export default function PoliticaPrivacidade() {
               <li><strong>Informação</strong> sobre compartilhamento dos seus dados</li>
               <li><strong>Revogação do consentimento</strong> e exclusão da conta</li>
             </ul>
-            <p>Para exercer esses direitos, escreva para <strong>dpo@acompanha.com.br</strong>.</p>
+            <p>Para exercer esses direitos, escreva para <strong>alberttcarlosu.u@gmail.com</strong>.</p>
           </section>
 
           <section className="space-y-2">
@@ -190,11 +190,9 @@ export default function PoliticaPrivacidade() {
           </section>
 
           <p className="text-[11px] italic text-[var(--color-muted-foreground)] pt-4 border-t">
-            ⚠️ Este texto é um modelo inicial. Antes de operar comercialmente com dados reais,
-            recomendamos revisão por advogado especializado em direito digital e LGPD, ou
-            substituição por documento gerado em serviços como iubenda.com ou termly.io.
-            Substitua todos os marcadores [SEU NOME], [SEU CNPJ], [SUA CIDADE] e e-mails de
-            contato pelos valores reais.
+            Esta política é a versão 1.0, vigente desde 23/05/2026. Recomendamos revisão
+            periódica por profissional especializado em direito digital conforme o serviço
+            evolui.
           </p>
         </article>
       </div>
