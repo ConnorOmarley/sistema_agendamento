@@ -72,6 +72,7 @@ export default function Login() {
   async function handleLogin(data: LoginFormData) {
     setErro(null);
 
+    // Pre-check client-side (UX rápida; o servidor refaz o check com fonte da verdade)
     const pre = checkThrottle(data.email);
     if (pre.locked) {
       setBloqueio({ remainingMs: pre.remainingMs, remainingLabel: pre.remainingLabel });
@@ -81,31 +82,34 @@ export default function Login() {
 
     setCarregando(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.senha,
-    });
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email, senha: data.senha }),
+      });
+      const json = await res.json();
 
-    if (error) {
-      const apos = recordFailure(data.email);
-      if (error.message === 'Invalid login credentials') {
-        setErro('E-mail ou senha incorretos.');
-      } else if (error.message === 'Email not confirmed') {
-        setErro('Por favor, confirme o seu e-mail antes de fazer login.');
-      } else {
-        setErro(error.message);
+      if (!res.ok || !json.ok) {
+        recordFailure(data.email);
+        if (res.status === 429 && json.retryAfterSeconds) {
+          const secs = json.retryAfterSeconds;
+          const label = secs >= 60 ? `${Math.ceil(secs / 60)} min` : `${secs} seg`;
+          setBloqueio({ remainingMs: secs * 1000, remainingLabel: label });
+        }
+        setErro(json.error || 'Falha no login.');
+        setCarregando(false);
+        return;
       }
-      if (apos.locked) {
-        setBloqueio({ remainingMs: apos.remainingMs, remainingLabel: apos.remainingLabel });
-        setErro(`Muitas tentativas falhadas. Aguarde ${apos.remainingLabel} para tentar de novo.`);
-      }
+
+      clearThrottle(data.email);
+      router.push('/dashboard');
+      router.refresh();
+    } catch (err) {
+      recordFailure(data.email);
+      setErro(err instanceof Error ? err.message : 'Erro de conexão.');
       setCarregando(false);
-      return;
     }
-
-    clearThrottle(data.email);
-    router.push('/dashboard');
-    router.refresh();
   }
 
   return (

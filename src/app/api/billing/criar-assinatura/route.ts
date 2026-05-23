@@ -13,13 +13,14 @@ import { cookies } from 'next/headers';
 import * as z from 'zod';
 import { subscribeWithCreditCard } from '@/lib/billing';
 import { AsaasError } from '@/lib/asaas/client';
+import { isValidCpfCnpj } from '@/lib/cpf-cnpj';
 
 const schema = z.object({
   plan: z.enum(['PROFISSIONAL', 'ESTUDIO']),
   holder: z.object({
     nome: z.string().min(3),
     email: z.string().email(),
-    cpfCnpj: z.string().min(11),
+    cpfCnpj: z.string().refine(isValidCpfCnpj, 'CPF ou CNPJ inválido'),
     telefone: z.string().min(10),
     cep: z.string().min(8),
     numero: z.string().min(1),

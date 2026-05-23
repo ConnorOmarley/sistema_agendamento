@@ -212,6 +212,39 @@ export async function logSubscriptionEvent(
 }
 
 /**
+ * Verifica se um evento já foi processado, usando event+payment.id como chave.
+ * Asaas reenvia eventos quando o webhook não responde 2xx — sem dedup,
+ * cada PAYMENT_RECEIVED estenderia o período do cliente várias vezes.
+ *
+ * Retorna true se já processado (deve ser ignorado).
+ */
+export async function isEventAlreadyProcessed(
+  eventType: string,
+  paymentId: string | undefined,
+  subscriptionId: string | undefined
+): Promise<boolean> {
+  if (!paymentId && !subscriptionId) return false;
+
+  const admin = createAdminClient();
+  const chaveExterna = paymentId || subscriptionId;
+
+  // Procura por evento anterior com mesmo tipo + mesmo payment.id no payload
+  const { data } = await admin
+    .from('subscription_events')
+    .select('id, asaas_payload')
+    .eq('event_type', eventType)
+    .order('created_at', { ascending: false })
+    .limit(50); // Janela razoável — Asaas só retenta por algumas horas
+
+  if (!data) return false;
+
+  return data.some((row) => {
+    const p = row.asaas_payload as { payment?: { id?: string }; subscription?: { id?: string } } | null;
+    return p?.payment?.id === chaveExterna || p?.subscription?.id === chaveExterna;
+  });
+}
+
+/**
  * Atualiza status da assinatura. Usado pelos handlers do webhook.
  */
 export async function updateSubscriptionStatus(

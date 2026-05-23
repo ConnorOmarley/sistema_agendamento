@@ -23,9 +23,11 @@ import {
   getSubscriptionByAsaasSubscription,
   logSubscriptionEvent,
   updateSubscriptionStatus,
+  isEventAlreadyProcessed,
   type SubscriptionRow,
 } from '@/lib/billing';
 import type { AsaasWebhookPayload } from '@/lib/asaas/types';
+import { captureException } from '@/lib/monitoring';
 
 function nextDueDatePlus30(currentDueDate: string): string {
   const d = new Date(currentDueDate + 'T12:00:00');
@@ -64,10 +66,20 @@ export async function POST(request: NextRequest) {
   try { payload = await request.json(); }
   catch { return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  // 3. Localiza assinatura local
+  // 3. Idempotência — ignora reentregas do mesmo evento
+  const jaProcessado = await isEventAlreadyProcessed(
+    payload.event,
+    payload.payment?.id,
+    payload.subscription?.id
+  );
+  if (jaProcessado) {
+    return NextResponse.json({ ok: true, skipped: 'evento já processado' });
+  }
+
+  // 4. Localiza assinatura local
   const sub = await localizar(payload);
 
-  // 4. Loga evento (mesmo sem subscription encontrada — útil pra debug)
+  // 5. Loga evento (mesmo sem subscription encontrada — útil pra debug)
   await logSubscriptionEvent(
     sub?.id ?? null,
     sub?.user_id ?? null,
@@ -81,7 +93,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, warning: 'subscription não localizada' });
   }
 
-  // 5. Roteia evento
+  // 6. Roteia evento
   try {
     switch (payload.event) {
       case 'PAYMENT_RECEIVED':
@@ -125,7 +137,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, event: payload.event });
   } catch (err) {
-    console.error('[webhook] erro processando evento', payload.event, err);
+    captureException(err, {
+      operation: 'asaas_webhook',
+      event: payload.event,
+      paymentId: payload.payment?.id,
+      subscriptionId: payload.subscription?.id,
+    });
     // Retorna 500 pro Asaas reentregar mais tarde
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Erro interno' },

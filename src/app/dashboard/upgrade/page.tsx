@@ -7,6 +7,7 @@ import {
   Sparkles, Lock, Calendar,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { isValidCpfCnpj } from '@/lib/cpf-cnpj';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -107,6 +108,12 @@ export default function UpgradePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
+
+    if (!isValidCpfCnpj(cpf)) {
+      setErro('CPF ou CNPJ inválido. Confira os dígitos.');
+      return;
+    }
+
     setEnviando(true);
 
     const payload = {
