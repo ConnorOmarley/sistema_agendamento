@@ -19,13 +19,23 @@ import {
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 
-const NAV = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+}
+
+const MAIN_NAV: NavItem[] = [
   { href: '/dashboard', label: 'Início', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/agendamentos', label: 'Agenda', icon: CalendarDays },
   { href: '/dashboard/evolucoes', label: 'Prontuários', icon: FileText },
   { href: '/dashboard/fechamento', label: 'Fechamento', icon: Receipt },
-  { href: '/dashboard/upgrade', label: 'Assinatura', icon: Crown },
   { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
+];
+
+const ACCOUNT_NAV: NavItem[] = [
+  { href: '/dashboard/upgrade', label: 'Assinatura', icon: Crown },
   { href: '/dashboard/lixeira', label: 'Lixeira', icon: Trash2 },
 ];
 
@@ -51,7 +61,7 @@ export function Sidebar() {
     router.refresh();
   }
 
-  const ativo = (item: typeof NAV[number]) =>
+  const ativo = (item: NavItem) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href);
 
   return (
@@ -87,7 +97,7 @@ export function Sidebar() {
               <X className="size-5" />
             </button>
             <nav className="flex flex-col gap-1">
-              {NAV.map((item) => {
+              {MAIN_NAV.map((item) => {
                 const Icon = item.icon;
                 const a = ativo(item);
                 return (
@@ -107,16 +117,36 @@ export function Sidebar() {
                 );
               })}
             </nav>
-            <div className="mt-auto space-y-3 pt-4 border-t">
-              <div className="px-2">
+            <div className="mt-auto space-y-1 pt-4 border-t">
+              <div className="px-2 pb-2">
                 <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)] font-bold">Conta</p>
                 <p className="text-xs font-medium truncate">{userEmail}</p>
               </div>
+              {ACCOUNT_NAV.map((item) => {
+                const Icon = item.icon;
+                const a = ativo(item);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all',
+                      a
+                        ? 'bg-[var(--color-muted)] text-[var(--color-foreground)]'
+                        : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]/60 hover:text-[var(--color-foreground)]'
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
               <button
+                type="button"
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors"
               >
-                <LogOut className="size-5" />
+                <LogOut className="size-4" />
                 Sair
               </button>
             </div>
@@ -137,7 +167,7 @@ export function Sidebar() {
         </Link>
 
         <nav className="flex flex-col gap-1">
-          {NAV.map((item) => {
+          {MAIN_NAV.map((item) => {
             const Icon = item.icon;
             const a = ativo(item);
             return (
@@ -163,13 +193,35 @@ export function Sidebar() {
             <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)] font-bold">Logada como</p>
             <p className="text-xs font-medium truncate mt-0.5">{userEmail || 'Carregando...'}</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 transition-colors"
-          >
-            <LogOut className="size-5" />
-            Sair
-          </button>
+
+          <div className="space-y-0.5">
+            {ACCOUNT_NAV.map((item) => {
+              const Icon = item.icon;
+              const a = ativo(item);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all',
+                    a
+                      ? 'bg-white text-[var(--color-foreground)] shadow-sm'
+                      : 'text-[var(--color-muted-foreground)] hover:bg-white/60 hover:text-[var(--color-foreground)]'
+                  )}
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors"
+            >
+              <LogOut className="size-4" />
+              Sair
+            </button>
+          </div>
         </div>
       </aside>
     </>
