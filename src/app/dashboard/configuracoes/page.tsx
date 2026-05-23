@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Wallet,
@@ -8,6 +8,7 @@ import {
   Building2,
   Save,
   CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
@@ -34,6 +35,25 @@ export default function ConfiguracoesUsuario() {
   const [regimeTributario, setRegimeTributario] = useState('Simples Nacional');
   const [aliquota, setAliquota] = useState('0.00');
 
+  const [configOriginal, setConfigOriginal] = useState<string | null>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+  const configAtualJSON = JSON.stringify({
+    chavePix, diaCobranca,
+    formasPagamento: [...formasPagamento].sort(),
+    msgLembrete, msgCobranca, razaoSocial, cnpj, inscricaoMunicipal, regimeTributario, aliquota,
+  });
+  const isDirty = configOriginal !== null && configAtualJSON !== configOriginal;
+
+  // Avisa ao fechar aba/janela com alterações não salvas
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
   useEffect(() => {
     async function carregar() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -43,20 +63,29 @@ export default function ConfiguracoesUsuario() {
         .select('*')
         .eq('user_id', session.user.id)
         .single();
-      if (config) {
-        setChavePix(config.chave_pix || '');
-        setDiaCobranca(config.dia_cobranca_padrao || 5);
-        setFormasPagamento(config.formas_pagamento || []);
-        setMsgLembrete(config.mensagem_lembrete || '');
-        setMsgCobranca(config.mensagem_cobranca || '');
-        setRazaoSocial(config.razao_social || '');
-        setCnpj(config.cnpj || '');
-        setInscricaoMunicipal(config.inscricao_municipal || '');
-        setRegimeTributario(config.regime_tributario || 'Simples Nacional');
-        setAliquota(Number(config.aliquota_imposto).toFixed(2));
-      } else {
-        setFormasPagamento(['PIX', 'Dinheiro']);
-      }
+      const snap = {
+        chavePix: config?.chave_pix || '',
+        diaCobranca: config?.dia_cobranca_padrao || 5,
+        formasPagamento: config?.formas_pagamento || ['PIX', 'Dinheiro'],
+        msgLembrete: config?.mensagem_lembrete || '',
+        msgCobranca: config?.mensagem_cobranca || '',
+        razaoSocial: config?.razao_social || '',
+        cnpj: config?.cnpj || '',
+        inscricaoMunicipal: config?.inscricao_municipal || '',
+        regimeTributario: config?.regime_tributario || 'Simples Nacional',
+        aliquota: Number(config?.aliquota_imposto).toFixed(2),
+      };
+      setChavePix(snap.chavePix);
+      setDiaCobranca(snap.diaCobranca);
+      setFormasPagamento(snap.formasPagamento);
+      setMsgLembrete(snap.msgLembrete);
+      setMsgCobranca(snap.msgCobranca);
+      setRazaoSocial(snap.razaoSocial);
+      setCnpj(snap.cnpj);
+      setInscricaoMunicipal(snap.inscricaoMunicipal);
+      setRegimeTributario(snap.regimeTributario);
+      setAliquota(snap.aliquota);
+      setConfigOriginal(JSON.stringify({ ...snap, formasPagamento: [...snap.formasPagamento].sort() }));
       setCarregando(false);
     }
     carregar();
@@ -92,6 +121,7 @@ export default function ConfiguracoesUsuario() {
 
     if (!error) {
       setMensagemSucesso('Configurações salvas com sucesso!');
+      setConfigOriginal(configAtualJSON);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(() => setMensagemSucesso(''), 4000);
     } else {
@@ -234,12 +264,33 @@ export default function ConfiguracoesUsuario() {
           </div>
         </Card>
 
-        <div className="flex justify-end">
-          <Button type="submit" size="lg" disabled={salvando}>
+        <div className="flex justify-end pb-20">
+          <Button ref={saveButtonRef} type="submit" size="lg" disabled={salvando || !isDirty}>
             {salvando ? 'Salvando...' : <><Save className="size-4" /> Salvar configurações</>}
           </Button>
         </div>
       </form>
+
+      {/* Sticky banner — alterações não salvas */}
+      {isDirty && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 lg:left-64 bg-amber-50 border-t-2 border-amber-300 shadow-2xl shadow-amber-900/20 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-2.5 text-amber-900 text-sm">
+            <AlertTriangle className="size-4 shrink-0" />
+            <p className="font-bold">Você tem alterações não salvas nas configurações.</p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            onClick={() => {
+              saveButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              saveButtonRef.current?.focus({ preventScroll: true });
+            }}
+          >
+            Ir para salvar <Save className="size-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

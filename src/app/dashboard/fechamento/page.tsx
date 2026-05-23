@@ -13,9 +13,11 @@ import {
   Receipt,
   Users,
   FileDown,
+  BarChart3,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { gerarReciboPDF } from '@/lib/pdf-recibo';
+import { gerarRelatorioPDF } from '@/lib/pdf-relatorio';
 import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -52,6 +54,7 @@ export default function FechamentoMensal() {
     aliquota_imposto?: number | null;
   }>({});
   const [emailProfissional, setEmailProfissional] = useState('');
+  const [formasPagamentoConfig, setFormasPagamentoConfig] = useState<string[]>([]);
   const [agendamentosCompletos, setAgendamentosCompletos] = useState<{
     id: string; aluno_id: string; data: string; horario: string;
     valor_sessao: number; status: string; status_pagamento: 'Pago' | 'Pendente';
@@ -70,7 +73,7 @@ export default function FechamentoMensal() {
 
     const { data: config } = await supabase
       .from('configuracoes_usuario')
-      .select('dia_cobranca_padrao, chave_pix, mensagem_cobranca, razao_social, cnpj, inscricao_municipal, regime_tributario, aliquota_imposto')
+      .select('dia_cobranca_padrao, chave_pix, mensagem_cobranca, razao_social, cnpj, inscricao_municipal, regime_tributario, aliquota_imposto, formas_pagamento')
       .eq('user_id', session.user.id)
       .single();
 
@@ -86,6 +89,7 @@ export default function FechamentoMensal() {
         chave_pix: config.chave_pix,
         aliquota_imposto: config.aliquota_imposto,
       });
+      setFormasPagamentoConfig(config.formas_pagamento || []);
     }
 
     const { data: listaAlunos } = await supabase
@@ -192,6 +196,19 @@ export default function FechamentoMensal() {
       sessoes: sessoesDoAluno,
       config: configRecibo,
       emailProfissional,
+    });
+  };
+
+  const gerarRelatorio = (fat: FaturaAluno) => {
+    const sessoesDoAluno = agendamentosCompletos.filter(
+      ag => ag.aluno_id === fat.alunoId && ag.data.startsWith(mesAnoSelecionado)
+    );
+    gerarRelatorioPDF({
+      nomeAluno: fat.nomeAluno,
+      mesAno: mesAnoSelecionado,
+      sessoes: sessoesDoAluno,
+      nomeProfissional: configRecibo.razao_social?.trim() || emailProfissional,
+      formasPagamento: formasPagamentoConfig,
     });
   };
 
@@ -346,6 +363,15 @@ export default function FechamentoMensal() {
                           <FileDown className="size-4 text-violet-500" />
                         </button>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={() => gerarRelatorio(fat)}
+                        title="Gerar relatório de frequência mensal"
+                        className="size-9 rounded-xl border border-[var(--color-border)] bg-white hover:bg-emerald-50 hover:border-emerald-300 flex items-center justify-center transition-colors"
+                      >
+                        <BarChart3 className="size-4 text-emerald-500" />
+                      </button>
 
                       {fat.valorTotal > 0 && fat.statusFinal !== 'Pago' && (
                         <button

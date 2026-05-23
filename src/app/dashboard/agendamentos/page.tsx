@@ -15,11 +15,11 @@ import { Card } from '@/components/ui/card';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 
 interface Aluno {
   id: string;
   nome: string;
+  email: string | null;
 }
 
 interface Agendamento {
@@ -54,6 +54,8 @@ export default function AgendaGeral() {
   const [horariosOcupadosNoDia, setHorariosOcupadosNoDia] = useState<string[]>([]);
   const [modoManual, setModoManual] = useState(false);
   const [erroForm, setErroForm] = useState<string | null>(null);
+  const [nomeProfissional, setNomeProfissional] = useState('');
+  const [enviarEmail, setEnviarEmail] = useState(true);
 
   async function carregarDadosAgenda() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -61,12 +63,19 @@ export default function AgendaGeral() {
 
     const { data: listaAlunos } = await supabase
       .from('alunos')
-      .select('id, nome')
+      .select('id, nome, email')
       .eq('user_id', session.user.id)
       .is('deleted_at', null)
       .order('nome', { ascending: true });
 
     if (listaAlunos) setAlunos(listaAlunos);
+
+    const { data: config } = await supabase
+      .from('configuracoes_usuario')
+      .select('razao_social')
+      .eq('user_id', session.user.id)
+      .single();
+    setNomeProfissional(config?.razao_social?.trim() || session.user.email || 'Profissional');
 
     const { data: listaAgendamentos } = await supabase
       .from('agendamentos')
@@ -117,6 +126,24 @@ export default function AgendaGeral() {
         setErroForm('Não foi possível criar o agendamento. Tente novamente.');
       }
       return;
+    }
+
+    // Notifica o aluno por e-mail (não bloqueia em caso de falha)
+    const alunoAlvo = alunos.find(a => a.id === alunoSelecionado);
+    if (enviarEmail && alunoAlvo?.email) {
+      fetch('/api/email-agendamento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emailDestino: alunoAlvo.email,
+          nomeAluno: alunoAlvo.nome,
+          data: dataSessao,
+          horario: horarioSessao,
+          valorSessao: parseFloat(valorSessao),
+          observacoes: obsSessao.trim() || null,
+          nomeProfissional,
+        }),
+      }).catch(() => { /* email é best-effort, não bloqueia */ });
     }
 
     setAlunoSelecionado(''); setDataSessao(''); setHorarioSessao(''); setObsSessao(''); setModoManual(false);
@@ -228,7 +255,27 @@ export default function AgendaGeral() {
             <div className="space-y-1.5">
               <Label htmlFor="textarea-obs">Observações</Label>
               <Textarea id="textarea-obs" placeholder="Ex: sala 2, trazer material…" value={obsSessao} onChange={(e) => setObsSessao(e.target.value)} rows={2} />
+              <p className="text-[10px] text-[var(--color-muted-foreground)] italic">Será incluída no e-mail enviado ao aluno (se houver e-mail cadastrado).</p>
             </div>
+
+            {alunoSelecionado && (() => {
+              const a = alunos.find(x => x.id === alunoSelecionado);
+              if (!a?.email) return null;
+              return (
+                <label className="flex items-start gap-2 p-3 rounded-xl bg-violet-50 border border-violet-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enviarEmail}
+                    onChange={(e) => setEnviarEmail(e.target.checked)}
+                    className="mt-0.5 accent-violet-600"
+                  />
+                  <div className="text-[11px]">
+                    <p className="font-bold text-violet-900">Enviar e-mail de confirmação</p>
+                    <p className="text-violet-700/80">Para <strong>{a.email}</strong></p>
+                  </div>
+                </label>
+              );
+            })()}
 
             <Button type="submit" size="lg" disabled={!horarioSessao} className="w-full">
               <CalendarDays className="size-4" />
@@ -253,10 +300,6 @@ export default function AgendaGeral() {
             ) : (
               agendamentos.map((ag) => {
                 const [ano, mes, dia] = ag.data.split('-');
-                const corStatus =
-                  ag.status === 'Concluído' ? 'success' :
-                  ag.status === 'Faltou' ? 'danger' : 'info';
-                const corPg = ag.status_pagamento === 'Pago' ? 'success' : 'warning';
                 return (
                   <div key={ag.id} className="p-4 sm:p-6 hover:bg-[var(--color-muted)]/30 transition-colors flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex items-center gap-3 sm:w-48 shrink-0">
@@ -279,23 +322,50 @@ export default function AgendaGeral() {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex flex-col gap-1">
-                        <Badge variant={corStatus}>{ag.status}</Badge>
-                        <Select value={ag.status} onChange={(e) => atualizarAgendamento(ag.id, 'status', e.target.value)} className="h-7 text-[10px] px-2">
-                          <option value="Agendado">🗓️ Agendado</option>
-                          <option value="Concluído">✅ Concluído</option>
-                          <option value="Faltou">❌ Faltou</option>
-                        </Select>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {/* Status da sessão */}
+                      <div className="flex rounded-xl border border-[var(--color-border)] overflow-hidden text-[10px] font-bold">
+                        {(['Agendado', 'Concluído', 'Faltou'] as const).map((s, i) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => atualizarAgendamento(ag.id, 'status', s)}
+                            className={[
+                              'px-2.5 py-1.5 transition-colors',
+                              i > 0 ? 'border-l border-[var(--color-border)]' : '',
+                              ag.status === s
+                                ? s === 'Concluído' ? 'bg-emerald-500 text-white'
+                                  : s === 'Faltou' ? 'bg-rose-500 text-white'
+                                  : 'bg-violet-500 text-white'
+                                : 'bg-white text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]',
+                            ].join(' ')}
+                          >
+                            {s === 'Agendado' ? '🗓️' : s === 'Concluído' ? '✅' : '❌'} {s}
+                          </button>
+                        ))}
                       </div>
 
-                      <div className="flex flex-col gap-1">
-                        <div className="text-[10px] font-bold text-[var(--color-foreground)]">R$ {Number(ag.valor_sessao).toFixed(2)}</div>
-                        <Select value={ag.status_pagamento} onChange={(e) => atualizarAgendamento(ag.id, 'status_pagamento', e.target.value)} className="h-7 text-[10px] px-2">
-                          <option value="Pendente">⏳ Pendente</option>
-                          <option value="Pago">💰 Pago</option>
-                        </Select>
-                        <Badge variant={corPg} className="self-start">{ag.status_pagamento}</Badge>
+                      {/* Valor + status de pagamento */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-extrabold">R$ {Number(ag.valor_sessao).toFixed(2)}</span>
+                        <div className="flex rounded-xl border border-[var(--color-border)] overflow-hidden text-[10px] font-bold">
+                          {(['Pendente', 'Pago'] as const).map((p, i) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => atualizarAgendamento(ag.id, 'status_pagamento', p)}
+                              className={[
+                                'px-2.5 py-1.5 transition-colors',
+                                i > 0 ? 'border-l border-[var(--color-border)]' : '',
+                                ag.status_pagamento === p
+                                  ? p === 'Pago' ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-white'
+                                  : 'bg-white text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]',
+                              ].join(' ')}
+                            >
+                              {p === 'Pendente' ? '⏳' : '💰'} {p}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
                       <button
