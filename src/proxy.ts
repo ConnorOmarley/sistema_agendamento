@@ -7,6 +7,18 @@ const AUTH_PAGES = ['/login', '/register', '/forgot-password'];
 // /reset-password é especial: o usuário PRECISA estar com sessão temporária do link.
 // Não bloqueia logado nem deslogado — deixa a página decidir.
 
+// Páginas do dashboard acessíveis mesmo com assinatura expirada/bloqueada.
+// O usuário precisa poder cancelar ou contratar um plano para sair do bloqueio.
+const ALLOWED_WHEN_BLOCKED = ['/dashboard/upgrade', '/dashboard/configuracoes'];
+
+function isAccessAllowed(sub: { status: string; trial_ends_at: string | null } | null): boolean {
+  if (!sub) return false;
+  if (sub.status === 'TRIALING' && sub.trial_ends_at) {
+    return new Date(sub.trial_ends_at) > new Date();
+  }
+  return sub.status === 'ACTIVE' || sub.status === 'PAST_DUE' || sub.status === 'CANCELED';
+}
+
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
   const supabase = createProxyClient(request, response);
@@ -24,6 +36,22 @@ export async function proxy(request: NextRequest) {
 
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  // Gate de assinatura: usuário logado em rota /dashboard sem acesso → /upgrade
+  if (isProtected && user) {
+    const allowedWhenBlocked = ALLOWED_WHEN_BLOCKED.some(p => pathname === p || pathname.startsWith(`${p}/`));
+    if (!allowedWhenBlocked) {
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('status, trial_ends_at')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!isAccessAllowed(sub)) {
+        return NextResponse.redirect(new URL('/dashboard/upgrade', request.url));
+      }
+    }
   }
 
   return response;

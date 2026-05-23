@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Trash2,
+  Crown,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,7 @@ const NAV = [
   { href: '/dashboard/agendamentos', label: 'Agenda', icon: CalendarDays },
   { href: '/dashboard/evolucoes', label: 'Prontuários', icon: FileText },
   { href: '/dashboard/fechamento', label: 'Fechamento', icon: Receipt },
+  { href: '/dashboard/upgrade', label: 'Assinatura', icon: Crown },
   { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
   { href: '/dashboard/lixeira', label: 'Lixeira', icon: Trash2 },
 ];
