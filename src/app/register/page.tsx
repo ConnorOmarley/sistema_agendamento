@@ -16,7 +16,8 @@ const registerSchema = z.object({
   nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres'),
   email: z.string().email('Insira um e-mail válido'),
   senha: z.string().min(8, 'A senha deve ter pelo menos 8 caracteres'),
-  confirmarSenha: z.string()
+  confirmarSenha: z.string(),
+  aceiteTermos: z.literal(true, { message: 'Você precisa aceitar os Termos e a Política de Privacidade.' }),
 }).refine((data) => data.senha === data.confirmarSenha, {
   message: "As senhas não coincidem",
   path: ["confirmarSenha"],
@@ -32,18 +33,25 @@ export default function Register() {
   const [verSenha, setVerSenha] = useState(false);
   const [verConfirmarSenha, setVerConfirmarSenha] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [aceiteTermos, setAceiteTermos] = useState(false);
+
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema)
+  });
 
   async function handleGoogle() {
+    if (!aceiteTermos) {
+      setErro('Você precisa aceitar os Termos e a Política de Privacidade antes de continuar.');
+      return;
+    }
     setGoogleLoading(true);
+    // Marca consent timestamp em localStorage; o callback persiste no metadata.
+    localStorage.setItem('pending_consent_at', new Date().toISOString());
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   }
-
-  const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema)
-  });
 
   async function handleRegister(data: RegisterFormData) {
     setCarregando(true);
@@ -52,7 +60,13 @@ export default function Register() {
     const { error: authError, data: authData } = await supabase.auth.signUp({
       email: data.email,
       password: data.senha,
-      options: { data: { display_name: data.nome } }
+      options: {
+        data: {
+          display_name: data.nome,
+          consent_at: new Date().toISOString(),
+          consent_version: '1.0',
+        },
+      },
     });
 
     if (authError) {
@@ -201,6 +215,31 @@ export default function Register() {
               </div>
               {errors.confirmarSenha && <p className="text-xs font-medium text-rose-600">{errors.confirmarSenha.message}</p>}
             </div>
+
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-violet-50/40 border border-violet-100 cursor-pointer">
+              <input
+                type="checkbox"
+                {...register('aceiteTermos')}
+                checked={aceiteTermos}
+                onChange={(e) => {
+                  setAceiteTermos(e.target.checked);
+                  setValue('aceiteTermos', e.target.checked as true, { shouldValidate: true });
+                }}
+                className="mt-0.5 accent-violet-600 size-4"
+              />
+              <span className="text-[11px] leading-relaxed text-[var(--color-foreground)]/80">
+                Li e aceito os{' '}
+                <Link href="/termos" target="_blank" className="font-bold text-[var(--color-primary)] hover:underline">
+                  Termos de Uso
+                </Link>{' '}
+                e a{' '}
+                <Link href="/privacidade" target="_blank" className="font-bold text-[var(--color-primary)] hover:underline">
+                  Política de Privacidade
+                </Link>
+                , autorizando o tratamento dos meus dados conforme a LGPD para uso do serviço Acompanha.
+              </span>
+            </label>
+            {errors.aceiteTermos && <p className="text-xs font-medium text-rose-600">{errors.aceiteTermos.message}</p>}
 
             <Button type="submit" size="lg" disabled={carregando} className="w-full">
               {carregando ? 'Criando conta...' : <>Cadastrar <ArrowRight className="size-4" /></>}
