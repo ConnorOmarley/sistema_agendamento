@@ -90,7 +90,8 @@ export async function POST(request: NextRequest) {
 </html>`;
 
   try {
-    const res = await fetch('https://api.resend.com/emails', {
+    const resendUrl = process.env.RESEND_API_URL || 'https://api.resend.com/emails';
+    const res = await fetch(resendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

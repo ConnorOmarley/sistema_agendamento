@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Sparkles, ArrowLeft } from 'lucide-react';
+import { controlador } from '@/lib/controlador';
 
 export const metadata = {
   title: 'Termos de Uso · Acompanha',
@@ -148,7 +149,7 @@ export default function TermosDeUso() {
             <h2 className="text-lg font-extrabold">12. Contato</h2>
             <p>
               Dúvidas sobre estes Termos? Escreva para{' '}
-              <strong>alberttcarlosu.u@gmail.com</strong>.
+              <strong>{controlador.email}</strong>.
             </p>
           </section>
 

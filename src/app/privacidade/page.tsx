@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Sparkles, ArrowLeft, Shield } from 'lucide-react';
+import { controlador } from '@/lib/controlador';
 
 export const metadata = {
   title: 'Política de Privacidade · Acompanha',
@@ -47,8 +48,8 @@ export default function PoliticaPrivacidade() {
             <p>
               O <strong>Acompanha</strong> é um serviço de software como serviço (SaaS) para
               profissionais de pedagogia e psicopedagogia gerenciarem agenda, alunos, evoluções
-              clínicas e cobrança. Operado por Carlos Alberto De Moura Chagas (pessoa física),
-              CPF 718.222.384-80, localizado em Recife/PE.
+              clínicas e cobrança. Operado por {controlador.nome} ({controlador.tipoPessoa}),
+              {' '}{controlador.documento}, localizado em {controlador.localizacao}.
             </p>
           </section>
 
@@ -56,8 +57,8 @@ export default function PoliticaPrivacidade() {
             <h2 className="text-lg font-extrabold">2. Encarregado pelo Tratamento de Dados (DPO)</h2>
             <p>
               Para questões relacionadas a privacidade e LGPD, contate:<br />
-              <strong>E-mail:</strong> alberttcarlosu.u@gmail.com<br />
-              <strong>Responsável:</strong> Carlos Alberto De Moura Chagas
+              <strong>E-mail:</strong> {controlador.email}<br />
+              <strong>Responsável:</strong> {controlador.nome}
             </p>
           </section>
 
@@ -123,7 +124,7 @@ export default function PoliticaPrivacidade() {
               <li><strong>Informação</strong> sobre compartilhamento dos seus dados</li>
               <li><strong>Revogação do consentimento</strong> e exclusão da conta</li>
             </ul>
-            <p>Para exercer esses direitos, escreva para <strong>alberttcarlosu.u@gmail.com</strong>.</p>
+            <p>Para exercer esses direitos, escreva para <strong>{controlador.email}</strong>.</p>
           </section>
 
           <section className="space-y-2">
