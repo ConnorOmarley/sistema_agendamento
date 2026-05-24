@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, FileText, User } from 'lucide-react';
+import { Search, FileText, User, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { registrarAuditoria } from '@/lib/audit-log';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +47,23 @@ export default function EvolucoesGeral() {
     const nome = ev.alunos?.nome.toLowerCase() || '';
     return nome.includes(termo) || ev.relatorio.toLowerCase().includes(termo);
   });
+
+  async function handleRemoverEvolucao(id: string, nomeAluno: string) {
+    if (!confirm(`Remover este registro de ${nomeAluno}? Vai pra Lixeira e pode ser restaurado.`)) return;
+    const { error } = await supabase
+      .from('evolucoes')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+    if (!error) {
+      setEvolucoes(atual => atual.filter(ev => ev.id !== id));
+      registrarAuditoria({
+        acao: 'delete',
+        entidade: 'evolucao',
+        entidadeId: id,
+        detalhes: { acao: 'soft_delete', aluno_nome: nomeAluno },
+      });
+    }
+  }
 
   if (carregando) {
     return <div className="flex items-center justify-center py-32 animate-pulse"><p className="text-[var(--color-muted-foreground)]">Carregando prontuários...</p></div>;
@@ -111,7 +129,17 @@ export default function EvolucoesGeral() {
                             <span className="text-sm text-[var(--color-muted-foreground)] italic">Aluno removido</span>
                           )}
                         </div>
-                        <Badge variant="primary">{ev.tipo_registro}</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="primary">{ev.tipo_registro}</Badge>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverEvolucao(ev.id, ev.alunos?.nome || 'aluno removido')}
+                            title="Remover registro (vai pra Lixeira)"
+                            className="size-7 rounded-lg text-[var(--color-muted-foreground)] hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center transition-colors"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-sm text-[var(--color-foreground)]/85 whitespace-pre-wrap leading-relaxed">
                         {ev.relatorio}

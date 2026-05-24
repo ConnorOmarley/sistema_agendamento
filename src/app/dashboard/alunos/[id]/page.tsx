@@ -166,6 +166,23 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
     }
   }
 
+  async function handleRemoverEvolucao(id: string) {
+    if (!confirm('Remover este registro? Ele vai pra Lixeira e pode ser restaurado depois.')) return;
+    const { error } = await supabase
+      .from('evolucoes')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+    if (!error) {
+      setEvolucoes(atual => atual.filter(ev => ev.id !== id));
+      registrarAuditoria({
+        acao: 'delete',
+        entidade: 'evolucao',
+        entidadeId: id,
+        detalhes: { aluno_id: alunoId, acao: 'soft_delete' },
+      });
+    }
+  }
+
   async function handleRemoverAluno() {
     if (!confirm(`Tem certeza que deseja remover a ficha de ${aluno?.nome}? A ficha ficará arquivada (soft delete) e poderá ser recuperada por suporte se necessário.`)) return;
     const { data: { session } } = await supabase.auth.getSession();
@@ -376,9 +393,19 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <Badge variant="primary">{ev.tipo_registro}</Badge>
-                        <span className="text-[11px] text-[var(--color-muted-foreground)] flex items-center gap-1 font-medium">
-                          <Clock className="size-3" /> {new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-[var(--color-muted-foreground)] flex items-center gap-1 font-medium">
+                            <Clock className="size-3" /> {new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverEvolucao(ev.id)}
+                            title="Remover registro (vai pra Lixeira)"
+                            className="size-7 rounded-lg text-[var(--color-muted-foreground)] hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center transition-colors"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-sm text-[var(--color-foreground)]/85 whitespace-pre-line leading-relaxed mt-2">
                         {ev.relatorio}
