@@ -96,7 +96,8 @@ export default function FechamentoMensal() {
 
     const { data: listaAgendamentos } = await supabase
       .from('agendamentos').select('id, aluno_id, data, horario, valor_sessao, status, status_pagamento')
-      .eq('user_id', session.user.id);
+      .eq('user_id', session.user.id)
+      .is('deleted_at', null);
 
     setAgendamentosCompletos(
       (listaAgendamentos || []).map(ag => ({

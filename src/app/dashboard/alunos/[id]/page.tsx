@@ -100,7 +100,8 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
       .from('agendamentos')
       .select('status, valor_sessao, status_pagamento, data')
       .eq('aluno_id', alunoId)
-      .eq('user_id', session.user.id);
+      .eq('user_id', session.user.id)
+      .is('deleted_at', null);
 
     const validos = agendamentos || [];
     const prefixo = `${anoFiltro}-${mesFiltro}`;

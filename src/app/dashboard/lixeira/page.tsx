@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, RotateCcw, AlertTriangle, Archive, FileText } from 'lucide-react';
+import { Trash2, RotateCcw, AlertTriangle, Archive, FileText, CalendarDays, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { registrarAuditoria } from '@/lib/audit-log';
 import { Card } from '@/components/ui/card';
@@ -27,9 +27,20 @@ interface EvolucaoArquivada {
   deleted_at: string;
 }
 
+interface AgendamentoArquivado {
+  id: string;
+  aluno_id: string;
+  nomeAluno: string;
+  data: string;
+  horario: string;
+  status: string;
+  valor_sessao: number;
+  deleted_at: string;
+}
+
 interface ConfirmacaoState {
   tipo: 'restaurar' | 'deletar';
-  entidade: 'aluno' | 'evolucao';
+  entidade: 'aluno' | 'evolucao' | 'agendamento';
   id: string;
   nome: string;
 }
@@ -39,15 +50,17 @@ export default function Lixeira() {
   const [carregando, setCarregando] = useState(true);
   const [alunos, setAlunos] = useState<AlunoArquivado[]>([]);
   const [evolucoes, setEvolucoes] = useState<EvolucaoArquivada[]>([]);
+  const [agendamentos, setAgendamentos] = useState<AgendamentoArquivado[]>([]);
   const [confirmacao, setConfirmacao] = useState<ConfirmacaoState | null>(null);
   const [processando, setProcessando] = useState(false);
+  const [erroRestaurar, setErroRestaurar] = useState<string | null>(null);
 
   async function carregar() {
     setCarregando(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.push('/login'); return; }
 
-    const [{ data: alunosData }, { data: evolucoesData }] = await Promise.all([
+    const [{ data: alunosData }, { data: evolucoesData }, { data: agendamentosData }] = await Promise.all([
       supabase
         .from('alunos')
         .select('id, nome, email, telefone, deleted_at')
@@ -58,6 +71,13 @@ export default function Lixeira() {
       supabase
         .from('evolucoes')
         .select('id, aluno_id, data, tipo_registro, relatorio, deleted_at, alunos(nome)')
+        .eq('user_id', session.user.id)
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false }),
+
+      supabase
+        .from('agendamentos')
+        .select('id, aluno_id, data, horario, status, valor_sessao, deleted_at, alunos(nome)')
         .eq('user_id', session.user.id)
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false }),
@@ -75,6 +95,18 @@ export default function Lixeira() {
         deleted_at: e.deleted_at,
       }))
     );
+    setAgendamentos(
+      (agendamentosData || []).map((a) => ({
+        id: a.id,
+        aluno_id: a.aluno_id,
+        nomeAluno: (Array.isArray(a.alunos) ? a.alunos[0]?.nome : (a.alunos as { nome: string } | null)?.nome) || 'Aluno removido',
+        data: a.data,
+        horario: a.horario,
+        status: a.status,
+        valor_sessao: Number(a.valor_sessao) || 0,
+        deleted_at: a.deleted_at,
+      }))
+    );
     setCarregando(false);
   }
 
@@ -83,15 +115,28 @@ export default function Lixeira() {
   async function confirmarAcao() {
     if (!confirmacao) return;
     setProcessando(true);
+    setErroRestaurar(null);
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
     const { tipo, entidade, id, nome } = confirmacao;
-    const tabela = entidade === 'aluno' ? 'alunos' : 'evolucoes';
+    const tabela = entidade === 'aluno' ? 'alunos'
+                 : entidade === 'evolucao' ? 'evolucoes'
+                 : 'agendamentos';
 
     if (tipo === 'restaurar') {
-      await supabase.from(tabela).update({ deleted_at: null }).eq('id', id);
+      const { error } = await supabase.from(tabela).update({ deleted_at: null }).eq('id', id);
+      if (error) {
+        // 23505 = unique_violation (outro agendamento ativo já ocupa o mesmo slot)
+        if (error.code === '23505') {
+          setErroRestaurar(`Não foi possível restaurar: já existe outro agendamento ativo neste mesmo dia/horário.`);
+        } else {
+          setErroRestaurar('Erro ao restaurar: ' + error.message);
+        }
+        setProcessando(false);
+        return;
+      }
       await registrarAuditoria({ acao: 'update', entidade, entidadeId: id, detalhes: { acao: 'restaurar', nome } });
     } else {
       await supabase.from(tabela).delete().eq('id', id);
@@ -108,7 +153,7 @@ export default function Lixeira() {
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
-  const totalItens = alunos.length + evolucoes.length;
+  const totalItens = alunos.length + evolucoes.length + agendamentos.length;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -119,6 +164,17 @@ export default function Lixeira() {
           Registros removidos por soft delete. Restaure ou exclua permanentemente.
         </p>
       </header>
+
+      {erroRestaurar && (
+        <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 text-sm font-medium text-rose-700 flex items-start gap-2 animate-fade-in">
+          <AlertTriangle className="size-4 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-bold">Restauração bloqueada</p>
+            <p className="text-xs mt-0.5">{erroRestaurar}</p>
+          </div>
+          <button type="button" onClick={() => setErroRestaurar(null)} className="text-rose-500 hover:text-rose-700 text-xs font-bold">Fechar</button>
+        </div>
+      )}
 
       {/* Modal de confirmação */}
       {confirmacao && (
@@ -295,6 +351,71 @@ export default function Lixeira() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Agendamentos arquivados */}
+          <Card className="overflow-hidden">
+            <div className="p-5 border-b border-[var(--color-border)] flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-md shadow-emerald-500/25">
+                <CalendarDays className="size-5 text-white" />
+              </div>
+              <div>
+                <h2 className="font-extrabold text-sm">Agendamentos arquivados</h2>
+                <p className="text-[11px] text-[var(--color-muted-foreground)]">
+                  {agendamentos.length === 0 ? 'Nenhum' : `${agendamentos.length} ${agendamentos.length === 1 ? 'agendamento' : 'agendamentos'}`}
+                </p>
+              </div>
+            </div>
+
+            {agendamentos.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="text-xs text-[var(--color-muted-foreground)] italic">Nenhum agendamento arquivado.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[var(--color-border)]">
+                {agendamentos.map((ag) => {
+                  const [ano, mes, dia] = ag.data.split('-');
+                  const dataLegivel = `${dia}/${mes}/${ano}`;
+                  const horaLegivel = ag.horario.substring(0, 5);
+                  const nomeBonito = `${ag.nomeAluno} · ${dataLegivel} às ${horaLegivel}`;
+                  return (
+                    <div key={ag.id} className="p-5 flex flex-wrap items-center gap-4 hover:bg-[var(--color-muted)]/20 transition-colors">
+                      <div className="flex flex-col items-center justify-center size-12 rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
+                        <span className="text-[9px] uppercase font-bold opacity-80">{['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][parseInt(mes) - 1]}</span>
+                        <span className="text-sm font-black leading-none">{dia}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm">{ag.nomeAluno}</p>
+                        <p className="text-[11px] text-[var(--color-muted-foreground)] flex items-center gap-1 mt-0.5">
+                          <Clock className="size-3" /> {horaLegivel} · {dataLegivel} · R$ {ag.valor_sessao.toFixed(2)}
+                        </p>
+                      </div>
+                      <Badge variant="warning" className="text-[10px]">
+                        Arquivado em {formatarData(ag.deleted_at)}
+                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          title="Restaurar agendamento"
+                          onClick={() => setConfirmacao({ tipo: 'restaurar', entidade: 'agendamento', id: ag.id, nome: nomeBonito })}
+                          className="size-9 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 flex items-center justify-center transition-colors"
+                        >
+                          <RotateCcw className="size-4 text-violet-600" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Excluir permanentemente"
+                          onClick={() => setConfirmacao({ tipo: 'deletar', entidade: 'agendamento', id: ag.id, nome: nomeBonito })}
+                          className="size-9 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 flex items-center justify-center transition-colors"
+                        >
+                          <Trash2 className="size-4 text-rose-600" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Card>

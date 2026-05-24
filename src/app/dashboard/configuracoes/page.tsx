@@ -9,6 +9,7 @@ import {
   Save,
   CheckCircle2,
   AlertTriangle,
+  User,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
@@ -24,6 +25,8 @@ export default function ConfiguracoesUsuario() {
   const [salvando, setSalvando] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState('');
 
+  const [nomeExibicao, setNomeExibicao] = useState('');
+  const [emailLogado, setEmailLogado] = useState('');
   const [chavePix, setChavePix] = useState('');
   const [diaCobranca, setDiaCobranca] = useState(5);
   const [formasPagamento, setFormasPagamento] = useState<string[]>([]);
@@ -39,7 +42,7 @@ export default function ConfiguracoesUsuario() {
   const saveButtonRef = useRef<HTMLButtonElement>(null);
 
   const configAtualJSON = JSON.stringify({
-    chavePix, diaCobranca,
+    nomeExibicao, chavePix, diaCobranca,
     formasPagamento: [...formasPagamento].sort(),
     msgLembrete, msgCobranca, razaoSocial, cnpj, inscricaoMunicipal, regimeTributario, aliquota,
   });
@@ -58,12 +61,19 @@ export default function ConfiguracoesUsuario() {
     async function carregar() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push('/login'); return; }
+
+      // Nome de exibição: display_name (custom) -> full_name/name (Google) -> vazio
+      const md = session.user.user_metadata || {};
+      const nomeAtual = md.display_name || md.full_name || md.name || '';
+      setEmailLogado(session.user.email || '');
+
       const { data: config } = await supabase
         .from('configuracoes_usuario')
         .select('*')
         .eq('user_id', session.user.id)
         .single();
       const snap = {
+        nomeExibicao: String(nomeAtual),
         chavePix: config?.chave_pix || '',
         diaCobranca: config?.dia_cobranca_padrao || 5,
         formasPagamento: config?.formas_pagamento || ['PIX', 'Dinheiro'],
@@ -75,6 +85,7 @@ export default function ConfiguracoesUsuario() {
         regimeTributario: config?.regime_tributario || 'Simples Nacional',
         aliquota: Number(config?.aliquota_imposto).toFixed(2),
       };
+      setNomeExibicao(snap.nomeExibicao);
       setChavePix(snap.chavePix);
       setDiaCobranca(snap.diaCobranca);
       setFormasPagamento(snap.formasPagamento);
@@ -104,6 +115,12 @@ export default function ConfiguracoesUsuario() {
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
+
+    // Salva display_name no user_metadata do Supabase Auth (não bloqueia se falhar)
+    const nomeLimpo = nomeExibicao.trim();
+    if (nomeLimpo) {
+      await supabase.auth.updateUser({ data: { display_name: nomeLimpo } });
+    }
 
     const { error } = await supabase.from('configuracoes_usuario').upsert({
       user_id: session.user.id,
@@ -149,6 +166,42 @@ export default function ConfiguracoesUsuario() {
       )}
 
       <form onSubmit={handleSalvar} className="space-y-6">
+        {/* Perfil */}
+        <Card className="p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl gradient-primary flex items-center justify-center shadow-md shadow-purple-500/25">
+              <User className="size-5 text-white" />
+            </div>
+            <div>
+              <h2 className="font-extrabold tracking-tight">👤 Perfil</h2>
+              <p className="text-xs text-[var(--color-muted-foreground)]">Como o sistema te chama</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="input-nome-exibicao">Nome de exibição</Label>
+              <Input
+                id="input-nome-exibicao"
+                type="text"
+                placeholder="Ex: Carlos, Profa. Ana, Dr. João..."
+                value={nomeExibicao}
+                onChange={(e) => setNomeExibicao(e.target.value)}
+              />
+              <p className="text-[10px] text-[var(--color-muted-foreground)]">
+                Aparece no banner do dashboard. Usa só o primeiro nome se você puser o nome completo.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>E-mail da conta</Label>
+              <Input type="email" value={emailLogado} disabled className="opacity-60 cursor-not-allowed" />
+              <p className="text-[10px] text-[var(--color-muted-foreground)]">
+                Identificação da conta. Não pode ser alterado por aqui.
+              </p>
+            </div>
+          </div>
+        </Card>
+
         {/* Financeiro */}
         <Card className="p-6 space-y-5">
           <div className="flex items-center gap-3">

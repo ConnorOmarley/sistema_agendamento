@@ -51,8 +51,12 @@ export default function DashboardPrincipal() {
         router.push('/login');
         return;
       }
-      const nome = session.user.user_metadata?.display_name || session.user.email?.split('@')[0] || 'Profissional';
-      setNomeUsuario(nome);
+      // Fallback: display_name (custom) -> full_name/name (Google OAuth) -> prefixo do email
+      const md = session.user.user_metadata || {};
+      const nomeCompleto = md.display_name || md.full_name || md.name || session.user.email?.split('@')[0] || 'Profissional';
+      // Mostra só o primeiro nome pra ficar amigável
+      const primeiroNome = String(nomeCompleto).split(/\s+/)[0];
+      setNomeUsuario(primeiroNome);
 
       const { data: listaAlunos } = await supabase
         .from('alunos')
@@ -64,7 +68,8 @@ export default function DashboardPrincipal() {
       const { data: listaAgendamentos } = await supabase
         .from('agendamentos')
         .select('status, valor_sessao, status_pagamento')
-        .eq('user_id', session.user.id);
+        .eq('user_id', session.user.id)
+        .is('deleted_at', null);
 
       const listaAlunosValida = listaAlunos || [];
       const listaAgendamentosValida = listaAgendamentos || [];

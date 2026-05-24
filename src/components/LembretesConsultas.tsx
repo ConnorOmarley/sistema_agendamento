@@ -55,6 +55,7 @@ export default function LembretesConsultas() {
       `)
       .eq('user_id', session.user.id)
       .eq('data', dataAmanhaFormatada)
+      .is('deleted_at', null)
       .not('status', 'eq', 'Faltou');
 
     if (listaAgendamentos) {

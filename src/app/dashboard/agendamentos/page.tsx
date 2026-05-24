@@ -11,6 +11,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { registrarAuditoria } from '@/lib/audit-log';
 import { Card } from '@/components/ui/card';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,6 +82,7 @@ export default function AgendaGeral() {
       .from('agendamentos')
       .select(`id, data, horario, status, valor_sessao, status_pagamento, observacoes, alunos (id, nome)`)
       .eq('user_id', session.user.id)
+      .is('deleted_at', null)
       .order('data', { ascending: false })
       .order('horario', { ascending: true });
 
@@ -156,9 +158,17 @@ export default function AgendaGeral() {
   }
 
   async function handleDeletarAgendamento(id: string) {
-    if (!confirm('Deseja realmente cancelar este agendamento?')) return;
-    const { error } = await supabase.from('agendamentos').delete().eq('id', id);
-    if (!error) setAgendamentos(atual => atual.filter(ag => ag.id !== id));
+    if (!confirm('Cancelar este agendamento? Ele vai pra Lixeira e pode ser restaurado depois.')) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { error } = await supabase
+      .from('agendamentos')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+    if (!error) {
+      setAgendamentos(atual => atual.filter(ag => ag.id !== id));
+      registrarAuditoria({ acao: 'delete', entidade: 'agendamento', entidadeId: id, detalhes: { acao: 'soft_delete' } });
+    }
   }
 
   if (carregando) {
