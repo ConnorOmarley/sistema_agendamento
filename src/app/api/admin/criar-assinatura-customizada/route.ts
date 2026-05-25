@@ -55,8 +55,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Não autenticado' }, { status: 401 });
   }
 
-  // 2. Gate admin
-  const isAdmin = (user.user_metadata as { is_admin?: boolean } | null)?.is_admin === true;
+  // 2. Gate admin — usa app_metadata (só gravável via service role).
+  //    user_metadata é gravável pelo próprio usuário e NÃO deve ser usado para gates de privilégio.
+  const isAdmin = (user.app_metadata as { is_admin?: boolean } | null)?.is_admin === true;
   if (!isAdmin) {
     return NextResponse.json({ ok: false, error: 'Acesso restrito a administradores' }, { status: 403 });
   }
@@ -79,16 +80,20 @@ export async function POST(request: NextRequest) {
   try {
     const admin = createAdminClient();
 
-    // 4. Localiza a conta da cliente (precisa existir)
-    const { data: { users }, error: lookupErr } = await admin.auth.admin.listUsers();
+    // 4. Localiza a conta da cliente por e-mail via função SQL (SECURITY DEFINER).
+    //    Evita listUsers() que retorna todos os usuários do sistema.
+    const { data: clienteId, error: lookupErr } = await admin
+      .rpc('get_user_id_by_email', { email_input: emailCliente.toLowerCase() });
     if (lookupErr) throw lookupErr;
-    const cliente = users.find(u => u.email?.toLowerCase() === emailCliente.toLowerCase());
-    if (!cliente) {
+    if (!clienteId) {
       return NextResponse.json(
         { ok: false, error: `Cliente ${emailCliente} ainda não tem conta no sistema. Peça pra ela criar primeiro em /register.` },
         { status: 404 }
       );
     }
+
+    // Monta objeto mínimo compatível com o restante do fluxo
+    const cliente = { id: clienteId as string, email: emailCliente };
 
     // 5. Garante subscription row local (trigger já cria no signup, mas defensivo)
     const { data: subExistente } = await admin

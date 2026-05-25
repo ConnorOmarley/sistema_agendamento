@@ -55,7 +55,6 @@ export default function AgendaGeral() {
   const [horariosOcupadosNoDia, setHorariosOcupadosNoDia] = useState<string[]>([]);
   const [modoManual, setModoManual] = useState(false);
   const [erroForm, setErroForm] = useState<string | null>(null);
-  const [nomeProfissional, setNomeProfissional] = useState('');
   const [enviarEmail, setEnviarEmail] = useState(true);
 
   async function carregarDadosAgenda() {
@@ -70,13 +69,6 @@ export default function AgendaGeral() {
       .order('nome', { ascending: true });
 
     if (listaAlunos) setAlunos(listaAlunos);
-
-    const { data: config } = await supabase
-      .from('configuracoes_usuario')
-      .select('razao_social')
-      .eq('user_id', session.user.id)
-      .single();
-    setNomeProfissional(config?.razao_social?.trim() || session.user.email || 'Profissional');
 
     const { data: listaAgendamentos } = await supabase
       .from('agendamentos')
@@ -109,7 +101,7 @@ export default function AgendaGeral() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { error } = await supabase.from('agendamentos').insert([{
+    const { data: novoAg, error } = await supabase.from('agendamentos').insert([{
       user_id: session.user.id,
       aluno_id: alunoSelecionado,
       data: dataSessao,
@@ -118,7 +110,7 @@ export default function AgendaGeral() {
       status: 'Agendado',
       status_pagamento: 'Pendente',
       observacoes: obsSessao.trim() || null
-    }]);
+    }]).select('id').single();
 
     if (error) {
       // Postgres 23505 = unique_violation (UNIQUE INDEX uniq_agendamentos_slot)
@@ -130,21 +122,13 @@ export default function AgendaGeral() {
       return;
     }
 
-    // Notifica o aluno por e-mail (não bloqueia em caso de falha)
-    const alunoAlvo = alunos.find(a => a.id === alunoSelecionado);
-    if (enviarEmail && alunoAlvo?.email) {
+    // Notifica o aluno por e-mail (best-effort, não bloqueia UI).
+    // Passa apenas o ID — o servidor valida propriedade e busca os dados no banco.
+    if (enviarEmail && novoAg?.id) {
       fetch('/api/email-agendamento', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          emailDestino: alunoAlvo.email,
-          nomeAluno: alunoAlvo.nome,
-          data: dataSessao,
-          horario: horarioSessao,
-          valorSessao: parseFloat(valorSessao),
-          observacoes: obsSessao.trim() || null,
-          nomeProfissional,
-        }),
+        body: JSON.stringify({ agendamentoId: novoAg.id }),
       }).catch(() => { /* email é best-effort, não bloqueia */ });
     }
 

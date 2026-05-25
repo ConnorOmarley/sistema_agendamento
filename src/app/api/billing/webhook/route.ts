@@ -18,6 +18,7 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import {
   getSubscriptionByAsaasCustomer,
   getSubscriptionByAsaasSubscription,
@@ -57,7 +58,11 @@ export async function POST(request: NextRequest) {
     console.error('[webhook] ASAAS_WEBHOOK_TOKEN não configurada — rejeitando');
     return NextResponse.json({ ok: false, error: 'Webhook não configurado' }, { status: 503 });
   }
-  if (receivedToken !== expectedToken) {
+  const tokensMatch =
+    receivedToken !== null &&
+    receivedToken.length === expectedToken.length &&
+    timingSafeEqual(Buffer.from(receivedToken), Buffer.from(expectedToken));
+  if (!tokensMatch) {
     return NextResponse.json({ ok: false, error: 'Token inválido' }, { status: 401 });
   }
 

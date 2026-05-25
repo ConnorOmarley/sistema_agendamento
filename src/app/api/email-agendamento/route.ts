@@ -1,14 +1,18 @@
-import { NextResponse, type NextRequest } from 'next/server';
+/**
+ * POST /api/email-agendamento
+ *
+ * Envia e-mail de confirmação ao aluno após um agendamento ser criado.
+ *
+ * Segurança:
+ * - Exige sessão autenticada (getUser).
+ * - Recebe apenas o agendamentoId — todos os dados de exibição vêm do banco,
+ *   nunca do corpo da requisição. Isso elimina injeção de conteúdo e garante
+ *   que o usuário autenticado seja dono do agendamento (user_id = auth.uid()).
+ */
 
-interface Payload {
-  emailDestino: string;
-  nomeAluno: string;
-  data: string;          // "2026-05-23"
-  horario: string;       // "14:00:00" ou "14:00"
-  valorSessao: number;
-  observacoes?: string | null;
-  nomeProfissional: string;
-}
+import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 function formatarData(iso: string) {
   const [a, m, d] = iso.split('-');
@@ -16,33 +20,81 @@ function formatarData(iso: string) {
 }
 
 export async function POST(request: NextRequest) {
+  // 1. Autenticação — sessão obrigatória
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (toSet) => toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)),
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: 'Não autenticado' }, { status: 401 });
+  }
+
+  // 2. Parse — aceita apenas o ID do agendamento
+  let body: { agendamentoId?: string };
+  try { body = await request.json(); }
+  catch { return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
+
+  const { agendamentoId } = body;
+  if (!agendamentoId) {
+    return NextResponse.json({ ok: false, error: 'agendamentoId obrigatório' }, { status: 400 });
+  }
+
+  // 3. Busca agendamento + aluno do banco, verificando propriedade via user_id.
+  //    RLS garante que o anon client só retorna linhas onde user_id = auth.uid().
+  //    O filtro explícito .eq('user_id', user.id) é uma segunda camada de defesa.
+  const { data: ag, error: agErr } = await supabase
+    .from('agendamentos')
+    .select(`
+      data,
+      horario,
+      valor_sessao,
+      observacoes,
+      alunos ( nome, email )
+    `)
+    .eq('id', agendamentoId)
+    .eq('user_id', user.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (agErr || !ag) {
+    return NextResponse.json({ ok: false, error: 'Agendamento não encontrado' }, { status: 404 });
+  }
+
+  // Supabase infere o join como array, mas agendamentos.aluno_id é FK many-to-one → objeto único
+  const aluno = ag.alunos as unknown as { nome: string; email: string | null } | null;
+  if (!aluno?.email) {
+    return NextResponse.json({ ok: false, skipped: true, reason: 'Aluno sem e-mail cadastrado' }, { status: 200 });
+  }
+
+  // 4. Configuração Resend
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
   if (!apiKey) {
-    return NextResponse.json(
-      { ok: false, skipped: true, reason: 'RESEND_API_KEY não configurada' },
-      { status: 200 }
-    );
+    return NextResponse.json({ ok: false, skipped: true, reason: 'RESEND_API_KEY não configurada' }, { status: 200 });
   }
 
-  let body: Payload;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 });
-  }
+  // 5. Busca nome do profissional (display_name ou prefixo do e-mail)
+  const md = user.user_metadata as Record<string, string> | null;
+  const nomeProfissional = md?.display_name || md?.full_name || md?.name || user.email?.split('@')[0] || 'Profissional';
 
-  const { emailDestino, nomeAluno, data, horario, valorSessao, observacoes, nomeProfissional } = body;
-  if (!emailDestino || !nomeAluno || !data || !horario) {
-    return NextResponse.json({ ok: false, error: 'Campos obrigatórios faltando' }, { status: 400 });
-  }
-
-  const dataLegivel = formatarData(data);
-  const horaLegivel = horario.substring(0, 5);
-  const obsHtml = observacoes?.trim()
+  // 6. Monta e-mail com dados exclusivamente do banco
+  const dataLegivel = formatarData(ag.data);
+  const horaLegivel = (ag.horario as string).substring(0, 5);
+  const nomeAluno = aluno.nome.replace(/</g, '&lt;');
+  const nomeProf = nomeProfissional.replace(/</g, '&lt;');
+  const obsHtml = (ag.observacoes as string | null)?.trim()
     ? `<tr><td style="padding:8px 0;color:#6b7280;font-size:13px">📝 <strong>Observação do profissional:</strong></td></tr>
-       <tr><td style="padding:0 0 16px 0;color:#111827;font-size:14px;line-height:1.6">${observacoes.trim().replace(/</g, '&lt;')}</td></tr>`
+       <tr><td style="padding:0 0 16px 0;color:#111827;font-size:14px;line-height:1.6">${(ag.observacoes as string).trim().replace(/</g, '&lt;')}</td></tr>`
     : '';
 
   const html = `<!DOCTYPE html>
@@ -58,9 +110,9 @@ export async function POST(request: NextRequest) {
     </tr>
     <tr>
       <td style="padding:28px 32px 8px">
-        <p style="margin:0 0 16px;font-size:15px;line-height:1.6">Olá, <strong>${nomeAluno.replace(/</g, '&lt;')}</strong>!</p>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6">Olá, <strong>${nomeAluno}</strong>!</p>
         <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#374151">
-          Uma sessão foi agendada com <strong>${nomeProfissional.replace(/</g, '&lt;')}</strong>. Anote os detalhes abaixo:
+          Uma sessão foi agendada com <strong>${nomeProf}</strong>. Anote os detalhes abaixo:
         </p>
       </td>
     </tr>
@@ -72,7 +124,7 @@ export async function POST(request: NextRequest) {
           <tr><td style="padding:6px 16px;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;font-weight:bold">🕐 Horário</td>
               <td style="padding:6px 16px;color:#111827;font-size:15px;font-weight:bold;text-align:right">${horaLegivel}</td></tr>
           <tr><td style="padding:6px 16px;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;font-weight:bold">💰 Valor</td>
-              <td style="padding:6px 16px;color:#111827;font-size:15px;font-weight:bold;text-align:right">R$ ${Number(valorSessao).toFixed(2)}</td></tr>
+              <td style="padding:6px 16px;color:#111827;font-size:15px;font-weight:bold;text-align:right">R$ ${Number(ag.valor_sessao).toFixed(2)}</td></tr>
         </table>
       </td>
     </tr>
@@ -99,7 +151,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         from: `Acompanha <${fromEmail}>`,
-        to: [emailDestino],
+        to: [aluno.email],
         subject: `Sessão agendada — ${dataLegivel} às ${horaLegivel}`,
         html,
       }),
