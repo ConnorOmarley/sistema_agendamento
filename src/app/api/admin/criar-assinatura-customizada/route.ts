@@ -118,10 +118,11 @@ export async function POST(request: NextRequest) {
       });
       asaasCustomerId = novoCustomer.id;
 
-      await admin
+      const { error: updateCustomerErr } = await admin
         .from('subscriptions')
         .update({ asaas_customer_id: asaasCustomerId })
         .eq('user_id', cliente.id);
+      if (updateCustomerErr) throw updateCustomerErr;
     }
 
     // 7. Cria assinatura UNDEFINED (cliente escolhe forma de pagamento via link)
@@ -139,8 +140,8 @@ export async function POST(request: NextRequest) {
       externalReference: cliente.id,
     });
 
-    // 8. Atualiza subscription local
-    await admin
+    // 8. Atualiza subscription local — erro aqui = assinatura existe no Asaas mas não rastreada localmente
+    const { error: updateSubErr } = await admin
       .from('subscriptions')
       .update({
         asaas_subscription_id: novaAssinatura.id,
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
         // Status fica TRIALING até PAYMENT_RECEIVED virar ACTIVE via webhook
       })
       .eq('user_id', cliente.id);
+    if (updateSubErr) throw updateSubErr;
 
     // 9. Gera link de pagamento da primeira cobrança
     //    Asaas cria payment automaticamente pra cada assinatura — buscamos o link da próxima cobrança

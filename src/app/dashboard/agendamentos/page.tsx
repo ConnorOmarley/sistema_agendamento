@@ -10,6 +10,7 @@ import {
   FileText,
   AlertCircle,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { registrarAuditoria } from '@/lib/audit-log';
 import type { AgendamentoStatus, StatusPagamento } from '@/types/domain';
@@ -157,6 +158,7 @@ export default function AgendaGeral() {
   async function atualizarAgendamento(id: string, campo: 'status' | 'status_pagamento', valor: string) {
     const { error } = await supabase.from('agendamentos').update({ [campo]: valor }).eq('id', id);
     if (!error) setAgendamentos(atual => atual.map(ag => ag.id === id ? { ...ag, [campo]: valor } : ag));
+    else toast.error('Não foi possível atualizar o agendamento. Tente novamente.');
   }
 
   async function handleDeletarAgendamento(id: string) {
@@ -170,6 +172,8 @@ export default function AgendaGeral() {
     if (!error) {
       setAgendamentos(atual => atual.filter(ag => ag.id !== id));
       registrarAuditoria({ acao: 'delete', entidade: 'agendamento', entidadeId: id, detalhes: { acao: 'soft_delete' } });
+    } else {
+      toast.error('Não foi possível cancelar o agendamento. Tente novamente.');
     }
   }
 

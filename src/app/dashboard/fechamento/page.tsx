@@ -14,6 +14,7 @@ import {
   Users,
   FileDown,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/context/user';
 import type { AgendamentoStatus, StatusPagamento } from '@/types/domain';
@@ -150,7 +151,7 @@ export default function FechamentoMensal() {
   }, [mesAnoSelecionado, router]);
 
   const dispararWhatsApp = (fat: FaturaAluno) => {
-    if (!fat.telefoneAluno) { alert(`${fat.nomeAluno} não tem telefone cadastrado.`); return; }
+    if (!fat.telefoneAluno) { toast.error(`${fat.nomeAluno} não tem telefone cadastrado.`); return; }
 
     const saudacao = fat.contatoResponsavel
       ? `Olá! Segue o fechamento das sessões de ${fat.nomeAluno}`
@@ -181,7 +182,7 @@ export default function FechamentoMensal() {
       if (idx !== -1 && idx + 1 < pendentes.length) {
         setAlunoIdFocoAtual(pendentes[idx + 1].alunoId);
       } else {
-        alert('🏁 Pronto! Você passou por todos os alunos inadimplentes deste mês.');
+        toast.success('Pronto! Você passou por todos os alunos inadimplentes deste mês.');
         setModoLoteAtivo(false); setAlunoIdFocoAtual(null);
       }
     }
@@ -189,7 +190,7 @@ export default function FechamentoMensal() {
 
   const iniciarFluxoLote = () => {
     const primeiro = faturas.find(f => f.valorTotal > 0 && f.statusFinal !== 'Pago' && f.telefoneAluno);
-    if (!primeiro) { alert('Não há faturas pendentes com telefone configurado.'); return; }
+    if (!primeiro) { toast.info('Não há faturas pendentes com telefone configurado.'); return; }
     setModoLoteAtivo(true); setAlunoIdFocoAtual(primeiro.alunoId);
   };
 

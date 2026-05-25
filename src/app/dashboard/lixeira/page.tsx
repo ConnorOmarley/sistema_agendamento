@@ -3,6 +3,7 @@
 import { useEffect, useReducer, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2, RotateCcw, AlertTriangle, Archive, FileText, CalendarDays, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { registrarAuditoria } from '@/lib/audit-log';
 import type { AgendamentoStatus, TipoRegistro } from '@/types/domain';
@@ -88,7 +89,11 @@ export default function Lixeira() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push('/login'); return; }
 
-      const [{ data: alunosData }, { data: evolucoesData }, { data: agendamentosData }] = await Promise.all([
+      const [
+        { data: alunosData, error: alunosErr },
+        { data: evolucoesData, error: evolucoesErr },
+        { data: agendamentosData, error: agendamentosErr },
+      ] = await Promise.all([
         supabase
           .from('alunos')
           .select('id, nome, email, telefone, deleted_at')
@@ -112,6 +117,12 @@ export default function Lixeira() {
       ]);
 
       if (cancelled) return;
+
+      if (alunosErr || evolucoesErr || agendamentosErr) {
+        toast.error('Erro ao carregar itens da lixeira. Tente recarregar a página.');
+        setCarregando(false);
+        return;
+      }
 
       setAlunos((alunosData || []) as AlunoArquivado[]);
       setEvolucoes(
@@ -169,7 +180,11 @@ export default function Lixeira() {
       }
       await registrarAuditoria({ acao: 'update', entidade, entidadeId: id, detalhes: { acao: 'restaurar', nome } });
     } else {
-      await supabase.from(tabela).delete().eq('id', id);
+      const { error: deleteErr } = await supabase.from(tabela).delete().eq('id', id);
+      if (deleteErr) {
+        dispatch({ type: 'ERRO', mensagem: 'Erro ao excluir permanentemente: ' + deleteErr.message });
+        return;
+      }
       await registrarAuditoria({ acao: 'delete', entidade, entidadeId: id, detalhes: { acao: 'exclusao_permanente', nome } });
     }
 

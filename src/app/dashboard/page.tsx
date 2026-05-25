@@ -12,6 +12,7 @@ import {
   Plus,
   ChevronRight,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/context/user';
 import LembretesConsultas from '@/components/LembretesConsultas';
@@ -105,6 +106,9 @@ export default function DashboardPrincipal() {
       setAlunos((atual) => [...atual, novo].sort((a, b) => a.nome.localeCompare(b.nome)));
       setMetricas(prev => ({ ...prev, totalAlunos: prev.totalAlunos + 1 }));
       setNomeNovoAluno('');
+      toast.success(`${novo.nome} adicionado com sucesso!`);
+    } else if (error) {
+      toast.error('Não foi possível criar o aluno. Tente novamente.');
     }
   }
 

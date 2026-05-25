@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Bell, MessageCircle, CheckCheck, Clock, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import type { AgendamentoStatus } from '@/types/domain';
 import { Card } from '@/components/ui/card';
@@ -88,7 +89,7 @@ export default function LembretesConsultas() {
 
   const dispararLembrete = (ag: AgendamentoAmanha) => {
     if (!ag.telefoneAluno) {
-      alert(`O aluno ${ag.nomeAluno} não possui telefone cadastrado.`);
+      toast.error(`${ag.nomeAluno} não possui telefone cadastrado.`);
       return;
     }
     const msg = ag.contatoResponsavel

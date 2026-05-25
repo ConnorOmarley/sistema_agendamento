@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   User,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { registrarAuditoria } from '@/lib/audit-log';
 import type { TipoRegistro } from '@/types/domain';
@@ -143,6 +144,8 @@ export default function PerfilAluno({ params }: { params: Promise<Params> }) {
       setAluno(prev => prev ? { ...prev, nome: nome.trim(), email: email.trim() || null, telefone: telefone.trim() || null, contato_responsavel: contatoResponsavel } : null);
       setAlertaSucesso(true);
       setTimeout(() => setAlertaSucesso(false), 4000);
+    } else {
+      toast.error('Erro ao salvar ficha: ' + error.message);
     }
   }
 
@@ -168,6 +171,8 @@ export default function PerfilAluno({ params }: { params: Promise<Params> }) {
         entidadeId: nova.id,
         detalhes: { aluno_id: alunoId, tipo_registro: tipoRegistro },
       });
+    } else if (error) {
+      toast.error('Não foi possível registrar a evolução. Tente novamente.');
     }
   }
 
@@ -185,6 +190,8 @@ export default function PerfilAluno({ params }: { params: Promise<Params> }) {
         entidadeId: id,
         detalhes: { aluno_id: alunoId, acao: 'soft_delete' },
       });
+    } else {
+      toast.error('Não foi possível remover o registro. Tente novamente.');
     }
   }
 
@@ -208,6 +215,8 @@ export default function PerfilAluno({ params }: { params: Promise<Params> }) {
         detalhes: { nome: aluno?.nome },
       });
       router.push('/dashboard');
+    } else {
+      toast.error('Não foi possível remover o aluno. Tente novamente.');
     }
   }
 

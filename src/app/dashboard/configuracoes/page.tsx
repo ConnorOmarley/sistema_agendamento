@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   User,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/context/user';
 import type { RegimeTributario } from '@/types/domain';
@@ -163,7 +164,7 @@ export default function ConfiguracoesUsuario() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(() => setMensagemSucesso(''), 4000);
     } else {
-      alert('Erro ao salvar: ' + error.message);
+      toast.error('Erro ao salvar configurações: ' + error.message);
     }
     setSalvando(false);
   }
