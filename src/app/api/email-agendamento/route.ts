@@ -13,6 +13,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { createRequestLogger } from '@/lib/logger';
+import { captureException } from '@/lib/monitoring';
 
 function formatarData(iso: string) {
   const [a, m, d] = iso.split('-');
@@ -29,6 +31,8 @@ function esc(s: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(crypto.randomUUID(), { action: 'email.agendamento' });
+
   // 1. Autenticação — sessão obrigatória
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -75,12 +79,14 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (agErr || !ag) {
+    log.warn({ userId: user.id, agendamentoId }, 'agendamento não encontrado para envio de e-mail');
     return NextResponse.json({ ok: false, error: 'Agendamento não encontrado' }, { status: 404 });
   }
 
   // Supabase infere o join como array, mas agendamentos.aluno_id é FK many-to-one → objeto único
   const aluno = ag.alunos as unknown as { nome: string; email: string | null } | null;
   if (!aluno?.email) {
+    log.info({ userId: user.id, agendamentoId }, 'e-mail ignorado: aluno sem e-mail cadastrado');
     return NextResponse.json({ ok: false, skipped: true, reason: 'Aluno sem e-mail cadastrado' }, { status: 200 });
   }
 
@@ -89,6 +95,7 @@ export async function POST(request: NextRequest) {
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
   if (!apiKey) {
+    log.warn({ userId: user.id }, 'e-mail ignorado: RESEND_API_KEY não configurada');
     return NextResponse.json({ ok: false, skipped: true, reason: 'RESEND_API_KEY não configurada' }, { status: 200 });
   }
 
@@ -168,11 +175,14 @@ export async function POST(request: NextRequest) {
 
     if (!res.ok) {
       const errText = await res.text();
+      log.error({ userId: user.id, agendamentoId, resendStatus: res.status }, 'Resend rejeitou o envio');
       return NextResponse.json({ ok: false, error: errText }, { status: res.status });
     }
 
+    log.info({ userId: user.id, agendamentoId }, 'e-mail de agendamento enviado');
     return NextResponse.json({ ok: true });
   } catch (err) {
+    captureException(err, { operation: 'email.agendamento', userId: user.id, agendamentoId });
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Erro desconhecido' },
       { status: 500 }

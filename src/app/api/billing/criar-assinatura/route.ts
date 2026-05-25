@@ -14,6 +14,8 @@ import * as z from 'zod';
 import { subscribeWithCreditCard } from '@/lib/billing';
 import { AsaasError } from '@/lib/asaas/client';
 import { isValidCpfCnpj } from '@/lib/cpf-cnpj';
+import { createRequestLogger } from '@/lib/logger';
+import { captureException } from '@/lib/monitoring';
 
 const schema = z.object({
   plan: z.enum(['PROFISSIONAL', 'ESTUDIO']),
@@ -36,6 +38,8 @@ const schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(crypto.randomUUID(), { action: 'billing.criar-assinatura' });
+
   // 1. Auth — usuário tem que estar logado
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -77,6 +81,7 @@ export async function POST(request: NextRequest) {
       remoteIp,
     });
 
+    log.info({ userId: user.id, plan: sub.plan, status: sub.status }, 'assinatura criada');
     return NextResponse.json({
       ok: true,
       subscription: {
@@ -90,11 +95,13 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     if (err instanceof AsaasError) {
+      log.warn({ userId: user.id, asaasErrors: err.errors }, 'Asaas rejeitou criação de assinatura');
       return NextResponse.json(
         { ok: false, error: 'Asaas rejeitou a operação', detalhes: err.errors },
         { status: 422 }
       );
     }
+    captureException(err, { operation: 'billing.criar-assinatura', userId: user.id });
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Erro desconhecido' },
       { status: 500 }

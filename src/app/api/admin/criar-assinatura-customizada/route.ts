@@ -77,6 +77,9 @@ export async function POST(request: NextRequest) {
 
   const { emailCliente, nome, cpfCnpj, telefone, valorMensal, descricao } = parsed.data;
 
+  // Declarado fora do try para ficar disponível no catch sem expor PII (emailCliente)
+  let resolvedUserId: string | null = null;
+
   try {
     const admin = createAdminClient();
 
@@ -94,6 +97,7 @@ export async function POST(request: NextRequest) {
 
     // Monta objeto mínimo compatível com o restante do fluxo
     const cliente = { id: clienteId as string, email: emailCliente };
+    resolvedUserId = cliente.id; // disponível no catch sem expor emailCliente
 
     // 5. Garante subscription row local (trigger já cria no signup, mas defensivo)
     const { data: subExistente } = await admin
@@ -172,7 +176,8 @@ export async function POST(request: NextRequest) {
         : 'Assinatura criada. Veja painel Asaas pra link de pagamento.',
     });
   } catch (err) {
-    captureException(err, { operation: 'admin_criar_assinatura_customizada', emailCliente });
+    // emailCliente é PII — usamos apenas o userId para correlação nos logs
+    captureException(err, { operation: 'admin_criar_assinatura_customizada', userId: resolvedUserId ?? 'unknown' });
     if (err instanceof AsaasError) {
       return NextResponse.json(
         { ok: false, error: 'Asaas rejeitou a operação', detalhes: err.errors },

@@ -13,6 +13,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { checkLoginThrottle, recordLoginAttempt } from '@/lib/login-throttle-server';
+import { createRequestLogger } from '@/lib/logger';
 
 function captureIp(req: NextRequest): string | null {
   const fwd = req.headers.get('x-forwarded-for') || '';
@@ -21,6 +22,8 @@ function captureIp(req: NextRequest): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(crypto.randomUUID(), { action: 'auth.login' });
+
   let body: { email?: string; senha?: string };
   try { body = await request.json(); }
   catch { return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
@@ -38,6 +41,7 @@ export async function POST(request: NextRequest) {
   // 1. Pre-check rate limit
   const pre = await checkLoginThrottle(email, ip);
   if (pre.blocked) {
+    log.warn({ ip, retryAfterSeconds: pre.retryAfterSeconds }, 'login bloqueado por rate limit');
     return NextResponse.json(
       { ok: false, error: pre.reason, retryAfterSeconds: pre.retryAfterSeconds },
       { status: 429, headers: { 'Retry-After': String(pre.retryAfterSeconds) } }
@@ -66,11 +70,15 @@ export async function POST(request: NextRequest) {
     // Re-check após falha — o usuário pode ter cruzado o threshold com essa tentativa
     const pos = await checkLoginThrottle(email, ip);
     if (pos.blocked) {
+      log.warn({ ip, retryAfterSeconds: pos.retryAfterSeconds }, 'login bloqueado após falha');
       return NextResponse.json(
         { ok: false, error: pos.reason, retryAfterSeconds: pos.retryAfterSeconds },
         { status: 429, headers: { 'Retry-After': String(pos.retryAfterSeconds) } }
       );
     }
+
+    // Não loga o email — evita PII em logs; o supabaseError code é suficiente para debug
+    log.warn({ supabaseErrorCode: error.message, ip }, 'tentativa de login falhou');
 
     // Mensagem genérica — evita enumeration (atacante saber se email existe ou não)
     const msg = error.message === 'Email not confirmed'
@@ -79,5 +87,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: msg }, { status: 401 });
   }
 
+  log.info({ userId: data.user?.id }, 'login bem-sucedido');
   return NextResponse.json({ ok: true, user: { id: data.user?.id, email: data.user?.email } });
 }
