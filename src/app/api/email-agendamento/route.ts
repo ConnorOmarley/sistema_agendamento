@@ -19,6 +19,15 @@ function formatarData(iso: string) {
   return `${d}/${m}/${a}`;
 }
 
+function esc(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function POST(request: NextRequest) {
   // 1. Autenticação — sessão obrigatória
   const cookieStore = await cookies();
@@ -90,11 +99,11 @@ export async function POST(request: NextRequest) {
   // 6. Monta e-mail com dados exclusivamente do banco
   const dataLegivel = formatarData(ag.data);
   const horaLegivel = (ag.horario as string).substring(0, 5);
-  const nomeAluno = aluno.nome.replace(/</g, '&lt;');
-  const nomeProf = nomeProfissional.replace(/</g, '&lt;');
+  const nomeAluno = esc(aluno.nome);
+  const nomeProf = esc(nomeProfissional);
   const obsHtml = (ag.observacoes as string | null)?.trim()
     ? `<tr><td style="padding:8px 0;color:#6b7280;font-size:13px">📝 <strong>Observação do profissional:</strong></td></tr>
-       <tr><td style="padding:0 0 16px 0;color:#111827;font-size:14px;line-height:1.6">${(ag.observacoes as string).trim().replace(/</g, '&lt;')}</td></tr>`
+       <tr><td style="padding:0 0 16px 0;color:#111827;font-size:14px;line-height:1.6">${esc((ag.observacoes as string).trim())}</td></tr>`
     : '';
 
   const html = `<!DOCTYPE html>

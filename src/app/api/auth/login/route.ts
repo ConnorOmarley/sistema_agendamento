@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
   const email = (body.email || '').trim().toLowerCase();
   const senha = body.senha || '';
 
-  if (!email || !senha) {
+  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!email || !senha || !emailValido) {
     return NextResponse.json({ ok: false, error: 'E-mail e senha obrigatórios' }, { status: 400 });
   }
 

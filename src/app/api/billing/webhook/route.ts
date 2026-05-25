@@ -19,6 +19,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { timingSafeEqual } from 'crypto';
+import * as z from 'zod';
 import {
   getSubscriptionByAsaasCustomer,
   getSubscriptionByAsaasSubscription,
@@ -29,6 +30,21 @@ import {
 } from '@/lib/billing';
 import type { AsaasWebhookPayload } from '@/lib/asaas/types';
 import { captureException } from '@/lib/monitoring';
+
+const webhookSchema = z.object({
+  event: z.string().min(1),
+  dateCreated: z.string().optional(),
+  payment: z.object({
+    id: z.string().optional(),
+    customer: z.string().optional(),
+    subscription: z.string().optional(),
+    dueDate: z.string().optional(),
+  }).optional(),
+  subscription: z.object({
+    id: z.string().optional(),
+    customer: z.string().optional(),
+  }).optional(),
+});
 
 function nextDueDatePlus30(currentDueDate: string): string {
   const d = new Date(currentDueDate + 'T12:00:00');
@@ -66,10 +82,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Token inválido' }, { status: 401 });
   }
 
-  // 2. Parse payload
-  let payload: AsaasWebhookPayload;
-  try { payload = await request.json(); }
+  // 2. Parse + valida estrutura mínima do payload
+  let raw: unknown;
+  try { raw = await request.json(); }
   catch { return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
+
+  const parsed = webhookSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ ok: false, error: 'Payload inválido' }, { status: 400 });
+  }
+  const payload = parsed.data as AsaasWebhookPayload;
 
   // 3. Idempotência — ignora reentregas do mesmo evento
   const jaProcessado = await isEventAlreadyProcessed(
