@@ -13,9 +13,9 @@
  */
 
 export const controlador = {
-  nome: process.env.CONTROLADOR_NOME || 'Carlos Alberto De Moura Chagas',
-  documento: process.env.CONTROLADOR_DOCUMENTO || 'CPF 718.222.384-80',
+  nome: process.env.CONTROLADOR_NOME || '[CONTROLADOR_NOME não configurado]',
+  documento: process.env.CONTROLADOR_DOCUMENTO || '[CONTROLADOR_DOCUMENTO não configurado]',
   tipoPessoa: process.env.CONTROLADOR_TIPO_PESSOA || 'pessoa física',
-  localizacao: process.env.CONTROLADOR_LOCALIZACAO || 'Recife/PE',
-  email: process.env.CONTROLADOR_EMAIL || 'alberttcarlosu.u@gmail.com',
+  localizacao: process.env.CONTROLADOR_LOCALIZACAO || '[CONTROLADOR_LOCALIZACAO não configurada]',
+  email: process.env.CONTROLADOR_EMAIL || '[CONTROLADOR_EMAIL não configurado]',
 } as const;
