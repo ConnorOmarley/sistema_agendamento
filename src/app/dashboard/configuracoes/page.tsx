@@ -12,6 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { DeleteAccountCard } from '@/components/dashboard/delete-account-card';
 import { Card } from '@/components/ui/card';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -317,12 +318,17 @@ export default function ConfiguracoesUsuario() {
           </div>
         </Card>
 
-        <div className="flex justify-end pb-20">
+        <div className="flex justify-end">
           <Button ref={saveButtonRef} type="submit" size="lg" disabled={salvando || !isDirty}>
             {salvando ? 'Salvando...' : <><Save className="size-4" /> Salvar configurações</>}
           </Button>
         </div>
       </form>
+
+      {/* Zona de perigo — FORA do form pra não conflitar com o submit de salvar */}
+      <div className="pb-20">
+        <DeleteAccountCard emailAtual={emailLogado} />
+      </div>
 
       {/* Sticky banner — alterações não salvas */}
       {isDirty && (

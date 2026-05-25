@@ -30,6 +30,7 @@ export default function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const oauthErro = searchParams.get('error') === 'oauth';
+  const contaExcluida = searchParams.get('conta_excluida') === '1';
 
   async function handleGoogle() {
     setGoogleLoading(true);
@@ -143,6 +144,12 @@ export default function Login() {
           {oauthErro && (
             <div className="rounded-2xl bg-rose-50 border border-rose-100 p-4 text-sm font-medium text-rose-700 animate-fade-in">
               Não foi possível entrar com o Google. Tente novamente.
+            </div>
+          )}
+
+          {contaExcluida && (
+            <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-sm font-medium text-emerald-700 animate-fade-in">
+              ✓ Conta excluída com sucesso. Todos os seus dados foram removidos conforme a LGPD.
             </div>
           )}
 
