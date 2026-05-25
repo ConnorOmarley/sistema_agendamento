@@ -2,10 +2,14 @@ import { Sidebar } from '@/components/dashboard/sidebar';
 import { TrialBanner } from '@/components/dashboard/trial-banner';
 import { ConsentSync } from '@/components/dashboard/consent-sync';
 import { ConfirmacaoBanner } from '@/components/dashboard/confirmacao-banner';
+import { UserProvider } from '@/context/user';
+import { SubscriptionProvider } from '@/context/subscription';
 import { Suspense } from 'react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
+    <UserProvider>
+    <SubscriptionProvider>
     <div className="flex min-h-screen flex-col lg:flex-row">
       <ConsentSync />
       <Sidebar />
@@ -19,5 +23,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </main>
     </div>
+    </SubscriptionProvider>
+    </UserProvider>
   );
 }

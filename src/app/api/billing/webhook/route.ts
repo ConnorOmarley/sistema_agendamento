@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     sub?.id ?? null,
     sub?.user_id ?? null,
     payload.event,
-    payload as unknown as Record<string, unknown>
+    payload
   );
 
   if (!sub) {

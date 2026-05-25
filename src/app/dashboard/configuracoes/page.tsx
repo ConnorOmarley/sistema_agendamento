@@ -12,6 +12,8 @@ import {
   User,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useUser } from '@/context/user';
+import type { RegimeTributario } from '@/types/domain';
 import { DeleteAccountCard } from '@/components/dashboard/delete-account-card';
 import { Card } from '@/components/ui/card';
 import { Input, Select, Textarea } from '@/components/ui/input';
@@ -20,34 +22,55 @@ import { Button } from '@/components/ui/button';
 
 const OPCOES_PAGAMENTO = ['PIX', 'Cartão de Crédito', 'Dinheiro', 'Transferência Bancária'];
 
+type ConfigForm = {
+  nomeExibicao: string;
+  chavePix: string;
+  diaCobranca: number;
+  formasPagamento: string[];
+  msgLembrete: string;
+  msgCobranca: string;
+  razaoSocial: string;
+  cnpj: string;
+  inscricaoMunicipal: string;
+  regimeTributario: RegimeTributario;
+  aliquota: string;
+};
+
+const CONFIG_DEFAULTS: ConfigForm = {
+  nomeExibicao: '',
+  chavePix: '',
+  diaCobranca: 5,
+  formasPagamento: [],
+  msgLembrete: '',
+  msgCobranca: '',
+  razaoSocial: '',
+  cnpj: '',
+  inscricaoMunicipal: '',
+  regimeTributario: 'Simples Nacional',
+  aliquota: '0.00',
+};
+
+function configJSON(c: ConfigForm) {
+  return JSON.stringify({ ...c, formasPagamento: [...c.formasPagamento].sort() });
+}
+
 export default function ConfiguracoesUsuario() {
   const router = useRouter();
+  const userInfo = useUser();
+  const emailLogado = userInfo?.email ?? '';
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState('');
 
-  const [nomeExibicao, setNomeExibicao] = useState('');
-  const [emailLogado, setEmailLogado] = useState('');
-  const [chavePix, setChavePix] = useState('');
-  const [diaCobranca, setDiaCobranca] = useState(5);
-  const [formasPagamento, setFormasPagamento] = useState<string[]>([]);
-  const [msgLembrete, setMsgLembrete] = useState('');
-  const [msgCobranca, setMsgCobranca] = useState('');
-  const [razaoSocial, setRazaoSocial] = useState('');
-  const [cnpj, setCnpj] = useState('');
-  const [inscricaoMunicipal, setInscricaoMunicipal] = useState('');
-  const [regimeTributario, setRegimeTributario] = useState('Simples Nacional');
-  const [aliquota, setAliquota] = useState('0.00');
+  const [config, setConfig] = useState<ConfigForm>(CONFIG_DEFAULTS);
+  const [savedConfig, setSavedConfig] = useState<ConfigForm | null>(null);
 
-  const [configOriginal, setConfigOriginal] = useState<string | null>(null);
+  const isDirty = savedConfig !== null && configJSON(config) !== configJSON(savedConfig);
+
   const saveButtonRef = useRef<HTMLButtonElement>(null);
 
-  const configAtualJSON = JSON.stringify({
-    nomeExibicao, chavePix, diaCobranca,
-    formasPagamento: [...formasPagamento].sort(),
-    msgLembrete, msgCobranca, razaoSocial, cnpj, inscricaoMunicipal, regimeTributario, aliquota,
-  });
-  const isDirty = configOriginal !== null && configAtualJSON !== configOriginal;
+  const set = <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) =>
+    setConfig(prev => ({ ...prev, [key]: value }));
 
   // Avisa ao fechar aba/janela com alterações não salvas
   useEffect(() => {
@@ -63,51 +86,42 @@ export default function ConfiguracoesUsuario() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push('/login'); return; }
 
-      // Nome de exibição: display_name (custom) -> full_name/name (Google) -> vazio
       const md = session.user.user_metadata || {};
       const nomeAtual = md.display_name || md.full_name || md.name || '';
-      setEmailLogado(session.user.email || '');
 
-      const { data: config } = await supabase
+      const { data: cfg } = await supabase
         .from('configuracoes_usuario')
         .select('*')
         .eq('user_id', session.user.id)
         .single();
-      const snap = {
+
+      const snap: ConfigForm = {
         nomeExibicao: String(nomeAtual),
-        chavePix: config?.chave_pix || '',
-        diaCobranca: config?.dia_cobranca_padrao || 5,
-        formasPagamento: config?.formas_pagamento || ['PIX', 'Dinheiro'],
-        msgLembrete: config?.mensagem_lembrete || '',
-        msgCobranca: config?.mensagem_cobranca || '',
-        razaoSocial: config?.razao_social || '',
-        cnpj: config?.cnpj || '',
-        inscricaoMunicipal: config?.inscricao_municipal || '',
-        regimeTributario: config?.regime_tributario || 'Simples Nacional',
-        aliquota: Number(config?.aliquota_imposto).toFixed(2),
+        chavePix: cfg?.chave_pix || '',
+        diaCobranca: cfg?.dia_cobranca_padrao || 5,
+        formasPagamento: cfg?.formas_pagamento || ['PIX', 'Dinheiro'],
+        msgLembrete: cfg?.mensagem_lembrete || '',
+        msgCobranca: cfg?.mensagem_cobranca || '',
+        razaoSocial: cfg?.razao_social || '',
+        cnpj: cfg?.cnpj || '',
+        inscricaoMunicipal: cfg?.inscricao_municipal || '',
+        regimeTributario: cfg?.regime_tributario || 'Simples Nacional',
+        aliquota: Number(cfg?.aliquota_imposto).toFixed(2),
       };
-      setNomeExibicao(snap.nomeExibicao);
-      setChavePix(snap.chavePix);
-      setDiaCobranca(snap.diaCobranca);
-      setFormasPagamento(snap.formasPagamento);
-      setMsgLembrete(snap.msgLembrete);
-      setMsgCobranca(snap.msgCobranca);
-      setRazaoSocial(snap.razaoSocial);
-      setCnpj(snap.cnpj);
-      setInscricaoMunicipal(snap.inscricaoMunicipal);
-      setRegimeTributario(snap.regimeTributario);
-      setAliquota(snap.aliquota);
-      setConfigOriginal(JSON.stringify({ ...snap, formasPagamento: [...snap.formasPagamento].sort() }));
+
+      setConfig(snap);
+      setSavedConfig(snap);
       setCarregando(false);
     }
     carregar();
   }, [router]);
 
-  const toggleForma = (forma: string) => {
-    setFormasPagamento(prev =>
-      prev.includes(forma) ? prev.filter(f => f !== forma) : [...prev, forma]
+  const toggleForma = (forma: string) =>
+    set('formasPagamento',
+      config.formasPagamento.includes(forma)
+        ? config.formasPagamento.filter(f => f !== forma)
+        : [...config.formasPagamento, forma]
     );
-  };
 
   async function handleSalvar(e: React.FormEvent) {
     e.preventDefault();
@@ -117,29 +131,28 @@ export default function ConfiguracoesUsuario() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    // Salva display_name no user_metadata do Supabase Auth (não bloqueia se falhar)
-    const nomeLimpo = nomeExibicao.trim();
+    const nomeLimpo = config.nomeExibicao.trim();
     if (nomeLimpo) {
       await supabase.auth.updateUser({ data: { display_name: nomeLimpo } });
     }
 
     const { error } = await supabase.from('configuracoes_usuario').upsert({
       user_id: session.user.id,
-      chave_pix: chavePix.trim() || null,
-      dia_cobranca_padrao: Number(diaCobranca),
-      formas_pagamento: formasPagamento,
-      mensagem_lembrete: msgLembrete.trim() || null,
-      mensagem_cobranca: msgCobranca.trim() || null,
-      razao_social: razaoSocial.trim() || null,
-      cnpj: cnpj.trim() || null,
-      inscricao_municipal: inscricaoMunicipal.trim() || null,
-      regime_tributario: regimeTributario,
-      aliquota_imposto: parseFloat(aliquota) || 0.00
+      chave_pix: config.chavePix.trim() || null,
+      dia_cobranca_padrao: Number(config.diaCobranca),
+      formas_pagamento: config.formasPagamento,
+      mensagem_lembrete: config.msgLembrete.trim() || null,
+      mensagem_cobranca: config.msgCobranca.trim() || null,
+      razao_social: config.razaoSocial.trim() || null,
+      cnpj: config.cnpj.trim() || null,
+      inscricao_municipal: config.inscricaoMunicipal.trim() || null,
+      regime_tributario: config.regimeTributario,
+      aliquota_imposto: parseFloat(config.aliquota) || 0.00,
     }, { onConflict: 'user_id' });
 
     if (!error) {
       setMensagemSucesso('Configurações salvas com sucesso!');
-      setConfigOriginal(configAtualJSON);
+      setSavedConfig(config);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(() => setMensagemSucesso(''), 4000);
     } else {
@@ -186,8 +199,8 @@ export default function ConfiguracoesUsuario() {
                 id="input-nome-exibicao"
                 type="text"
                 placeholder="Ex: Carlos, Profa. Ana, Dr. João..."
-                value={nomeExibicao}
-                onChange={(e) => setNomeExibicao(e.target.value)}
+                value={config.nomeExibicao}
+                onChange={(e) => set('nomeExibicao', e.target.value)}
               />
               <p className="text-[10px] text-[var(--color-muted-foreground)]">
                 Aparece no banner do dashboard. Usa só o primeiro nome se você puser o nome completo.
@@ -218,11 +231,24 @@ export default function ConfiguracoesUsuario() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="input-pix">Chave PIX principal</Label>
-              <Input id="input-pix" type="text" placeholder="E-mail, CPF, CNPJ ou chave aleatória" value={chavePix} onChange={(e) => setChavePix(e.target.value)} />
+              <Input
+                id="input-pix"
+                type="text"
+                placeholder="E-mail, CPF, CNPJ ou chave aleatória"
+                value={config.chavePix}
+                onChange={(e) => set('chavePix', e.target.value)}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="input-dia">Dia padrão de fechamento</Label>
-              <Input id="input-dia" type="number" min="1" max="28" value={diaCobranca} onChange={(e) => setDiaCobranca(parseInt(e.target.value) || 5)} />
+              <Input
+                id="input-dia"
+                type="number"
+                min="1"
+                max="28"
+                value={config.diaCobranca}
+                onChange={(e) => set('diaCobranca', parseInt(e.target.value) || 5)}
+              />
             </div>
           </div>
 
@@ -230,7 +256,7 @@ export default function ConfiguracoesUsuario() {
             <Label>Formas de pagamento aceitas</Label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {OPCOES_PAGAMENTO.map((forma) => {
-                const ativo = formasPagamento.includes(forma);
+                const ativo = config.formasPagamento.includes(forma);
                 return (
                   <label
                     key={forma}
@@ -264,12 +290,22 @@ export default function ConfiguracoesUsuario() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="txt-lembrete">Lembrete de sessão</Label>
-              <Textarea id="txt-lembrete" rows={3} value={msgLembrete} onChange={(e) => setMsgLembrete(e.target.value)} />
+              <Textarea
+                id="txt-lembrete"
+                rows={3}
+                value={config.msgLembrete}
+                onChange={(e) => set('msgLembrete', e.target.value)}
+              />
               <p className="text-[10px] text-[var(--color-muted-foreground)] italic">Tags: [nome_aluno], [data], [horario]</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="txt-cobranca">Fechamento / Cobrança mensal</Label>
-              <Textarea id="txt-cobranca" rows={3} value={msgCobranca} onChange={(e) => setMsgCobranca(e.target.value)} />
+              <Textarea
+                id="txt-cobranca"
+                rows={3}
+                value={config.msgCobranca}
+                onChange={(e) => set('msgCobranca', e.target.value)}
+              />
               <p className="text-[10px] text-[var(--color-muted-foreground)] italic">Tags: [nome_aluno], [valor_total], [chave_pix]</p>
             </div>
           </div>
@@ -290,20 +326,42 @@ export default function ConfiguracoesUsuario() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="input-razao">Razão social / nome profissional</Label>
-              <Input id="input-razao" type="text" placeholder="Nome completo ou razão social" value={razaoSocial} onChange={(e) => setRazaoSocial(e.target.value)} />
+              <Input
+                id="input-razao"
+                type="text"
+                placeholder="Nome completo ou razão social"
+                value={config.razaoSocial}
+                onChange={(e) => set('razaoSocial', e.target.value)}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="input-cnpj">CNPJ / CPF</Label>
-              <Input id="input-cnpj" type="text" placeholder="00.000.000/0001-00" value={cnpj} onChange={(e) => setCnpj(e.target.value)} />
+              <Input
+                id="input-cnpj"
+                type="text"
+                placeholder="00.000.000/0001-00"
+                value={config.cnpj}
+                onChange={(e) => set('cnpj', e.target.value)}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="input-im">Inscrição municipal</Label>
-              <Input id="input-im" type="text" placeholder="Opcional" value={inscricaoMunicipal} onChange={(e) => setInscricaoMunicipal(e.target.value)} />
+              <Input
+                id="input-im"
+                type="text"
+                placeholder="Opcional"
+                value={config.inscricaoMunicipal}
+                onChange={(e) => set('inscricaoMunicipal', e.target.value)}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="select-regime">Regime tributário</Label>
-                <Select id="select-regime" value={regimeTributario} onChange={(e) => setRegimeTributario(e.target.value)}>
+                <Select
+                  id="select-regime"
+                  value={config.regimeTributario}
+                  onChange={(e) => set('regimeTributario', e.target.value as RegimeTributario)}
+                >
                   <option value="Simples Nacional">Simples Nacional</option>
                   <option value="MEI">MEI</option>
                   <option value="Lucro Presumido">Lucro Presumido</option>
@@ -312,7 +370,13 @@ export default function ConfiguracoesUsuario() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="input-aliquota">Alíquota (%)</Label>
-                <Input id="input-aliquota" type="number" step="0.01" value={aliquota} onChange={(e) => setAliquota(e.target.value)} />
+                <Input
+                  id="input-aliquota"
+                  type="number"
+                  step="0.01"
+                  value={config.aliquota}
+                  onChange={(e) => set('aliquota', e.target.value)}
+                />
               </div>
             </div>
           </div>

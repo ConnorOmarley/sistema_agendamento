@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import type { AgendamentoStatus, StatusPagamento } from '@/types/domain';
 
 /**
  * Relatório mensal unificado: combina recibo de pagamento + relatório de
@@ -14,8 +15,8 @@ import autoTable from 'jspdf-autotable';
 interface SessaoInput {
   data: string;          // YYYY-MM-DD
   horario: string;       // HH:MM ou HH:MM:SS
-  status: 'Agendado' | 'Concluído' | 'Faltou' | string;
-  status_pagamento: 'Pago' | 'Pendente';
+  status: AgendamentoStatus;
+  status_pagamento: StatusPagamento;
   valor_sessao: number;
 }
 

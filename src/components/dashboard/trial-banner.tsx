@@ -1,28 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
-
-interface SubscriptionStatus {
-  status: 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'BLOCKED' | 'CANCELED' | 'EXPIRED';
-  diasRestantesTrial: number | null;
-  hasAsaasSubscription: boolean;
-}
+import { useSubscription } from '@/context/subscription';
 
 export function TrialBanner() {
   const pathname = usePathname();
-  const [sub, setSub] = useState<SubscriptionStatus | null>(null);
-
-  useEffect(() => {
-    fetch('/api/billing/status')
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok && data.subscription) setSub(data.subscription);
-      })
-      .catch(() => { /* silencioso */ });
-  }, []);
+  const { sub } = useSubscription();
 
   // Não mostrar na própria página de upgrade
   if (!sub || pathname.startsWith('/dashboard/upgrade')) return null;

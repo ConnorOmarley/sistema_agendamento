@@ -15,6 +15,8 @@ import {
   FileDown,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useUser } from '@/context/user';
+import type { AgendamentoStatus, StatusPagamento } from '@/types/domain';
 import { gerarReciboPDF } from '@/lib/pdf-recibo';
 import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/input';
@@ -33,6 +35,7 @@ interface FaturaAluno {
 
 export default function FechamentoMensal() {
   const router = useRouter();
+  const userInfo = useUser();
   const [carregando, setCarregando] = useState(true);
   const [faturas, setFaturas] = useState<FaturaAluno[]>([]);
 
@@ -51,93 +54,98 @@ export default function FechamentoMensal() {
     chave_pix?: string | null;
     aliquota_imposto?: number | null;
   }>({});
-  const [emailProfissional, setEmailProfissional] = useState('');
+  const emailProfissional = userInfo?.email ?? '';
   const [agendamentosCompletos, setAgendamentosCompletos] = useState<{
     id: string; aluno_id: string; data: string; horario: string;
-    valor_sessao: number; status: string; status_pagamento: 'Pago' | 'Pendente';
+    valor_sessao: number; status: AgendamentoStatus; status_pagamento: StatusPagamento;
   }[]>([]);
 
   const [modoLoteAtivo, setModoLoteAtivo] = useState(false);
   const [alunoIdFocoAtual, setAlunoIdFocoAtual] = useState<string | null>(null);
   const [idsAlunosCobrados, setIdsAlunosCobrados] = useState<string[]>([]);
 
-  async function calcularFechamento() {
-    setCarregando(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { router.push('/login'); return; }
+  useEffect(() => {
+    let cancelled = false;
 
-    setEmailProfissional(session.user.email || '');
+    async function calcularFechamento() {
+      setCarregando(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push('/login'); return; }
 
-    const { data: config } = await supabase
-      .from('configuracoes_usuario')
-      .select('dia_cobranca_padrao, chave_pix, mensagem_cobranca, razao_social, cnpj, inscricao_municipal, regime_tributario, aliquota_imposto, formas_pagamento')
-      .eq('user_id', session.user.id)
-      .single();
+      const { data: config } = await supabase
+        .from('configuracoes_usuario')
+        .select('dia_cobranca_padrao, chave_pix, mensagem_cobranca, razao_social, cnpj, inscricao_municipal, regime_tributario, aliquota_imposto, formas_pagamento')
+        .eq('user_id', session.user.id)
+        .single();
 
-    if (config) {
-      setDiaCobrancaPadrao(config.dia_cobranca_padrao || 5);
-      setChavePixPadrao(config.chave_pix || 'Não configurada');
-      setModeloMsgCobranca(config.mensagem_cobranca || '');
-      setConfigRecibo({
-        razao_social: config.razao_social,
-        cnpj: config.cnpj,
-        inscricao_municipal: config.inscricao_municipal,
-        regime_tributario: config.regime_tributario,
-        chave_pix: config.chave_pix,
-        aliquota_imposto: config.aliquota_imposto,
+      if (!cancelled && config) {
+        setDiaCobrancaPadrao(config.dia_cobranca_padrao || 5);
+        setChavePixPadrao(config.chave_pix || 'Não configurada');
+        setModeloMsgCobranca(config.mensagem_cobranca || '');
+        setConfigRecibo({
+          razao_social: config.razao_social,
+          cnpj: config.cnpj,
+          inscricao_municipal: config.inscricao_municipal,
+          regime_tributario: config.regime_tributario,
+          chave_pix: config.chave_pix,
+          aliquota_imposto: config.aliquota_imposto,
+        });
+      }
+
+      const { data: listaAlunos } = await supabase
+        .from('alunos').select('id, nome, telefone, contato_responsavel')
+        .eq('user_id', session.user.id)
+        .is('deleted_at', null)
+        .order('nome', { ascending: true });
+
+      const { data: listaAgendamentos } = await supabase
+        .from('agendamentos').select('id, aluno_id, data, horario, valor_sessao, status, status_pagamento')
+        .eq('user_id', session.user.id)
+        .is('deleted_at', null);
+
+      if (cancelled) return;
+
+      setAgendamentosCompletos(
+        (listaAgendamentos || []).map(ag => ({
+          id: ag.id,
+          aluno_id: ag.aluno_id,
+          data: ag.data,
+          horario: ag.horario,
+          valor_sessao: Number(ag.valor_sessao) || 0,
+          status: ag.status,
+          status_pagamento: ag.status_pagamento as 'Pago' | 'Pendente',
+        }))
+      );
+
+      if (!listaAlunos) { setCarregando(false); return; }
+
+      const validos = listaAgendamentos || [];
+      const relatorio: FaturaAluno[] = listaAlunos.map((aluno) => {
+        const sessoes = validos.filter((ag) => ag.aluno_id === aluno.id && ag.data.startsWith(mesAnoSelecionado) && ag.status !== 'Faltou');
+        const total = sessoes.length;
+        const valor = sessoes.reduce((s, i) => s + (Number(i.valor_sessao) || 0), 0);
+        const pagas = sessoes.filter(s => s.status_pagamento === 'Pago').length;
+        let status: 'Pago' | 'Pendente' | 'Parcial' = 'Pendente';
+        if (total > 0) {
+          if (pagas === total) status = 'Pago';
+          else if (pagas > 0) status = 'Parcial';
+        }
+        return {
+          alunoId: aluno.id, nomeAluno: aluno.nome,
+          telefoneAluno: aluno.telefone || null,
+          contatoResponsavel: aluno.contato_responsavel || false,
+          totalSessoes: total, valorTotal: valor, statusFinal: status,
+        };
       });
+
+      setFaturas(relatorio);
+      setModoLoteAtivo(false); setAlunoIdFocoAtual(null); setIdsAlunosCobrados([]);
+      setCarregando(false);
     }
 
-    const { data: listaAlunos } = await supabase
-      .from('alunos').select('id, nome, telefone, contato_responsavel')
-      .eq('user_id', session.user.id)
-      .is('deleted_at', null)
-      .order('nome', { ascending: true });
-
-    const { data: listaAgendamentos } = await supabase
-      .from('agendamentos').select('id, aluno_id, data, horario, valor_sessao, status, status_pagamento')
-      .eq('user_id', session.user.id)
-      .is('deleted_at', null);
-
-    setAgendamentosCompletos(
-      (listaAgendamentos || []).map(ag => ({
-        id: ag.id,
-        aluno_id: ag.aluno_id,
-        data: ag.data,
-        horario: ag.horario,
-        valor_sessao: Number(ag.valor_sessao) || 0,
-        status: ag.status,
-        status_pagamento: ag.status_pagamento as 'Pago' | 'Pendente',
-      }))
-    );
-
-    if (!listaAlunos) { setCarregando(false); return; }
-
-    const validos = listaAgendamentos || [];
-    const relatorio: FaturaAluno[] = listaAlunos.map((aluno) => {
-      const sessoes = validos.filter((ag) => ag.aluno_id === aluno.id && ag.data.startsWith(mesAnoSelecionado) && ag.status !== 'Faltou');
-      const total = sessoes.length;
-      const valor = sessoes.reduce((s, i) => s + (Number(i.valor_sessao) || 0), 0);
-      const pagas = sessoes.filter(s => s.status_pagamento === 'Pago').length;
-      let status: 'Pago' | 'Pendente' | 'Parcial' = 'Pendente';
-      if (total > 0) {
-        if (pagas === total) status = 'Pago';
-        else if (pagas > 0) status = 'Parcial';
-      }
-      return {
-        alunoId: aluno.id, nomeAluno: aluno.nome,
-        telefoneAluno: aluno.telefone || null,
-        contatoResponsavel: aluno.contato_responsavel || false,
-        totalSessoes: total, valorTotal: valor, statusFinal: status,
-      };
-    });
-
-    setFaturas(relatorio);
-    setModoLoteAtivo(false); setAlunoIdFocoAtual(null); setIdsAlunosCobrados([]);
-    setCarregando(false);
-  }
-
-  useEffect(() => { calcularFechamento(); }, [mesAnoSelecionado, router]);
+    calcularFechamento();
+    return () => { cancelled = true; };
+  }, [mesAnoSelecionado, router]);
 
   const dispararWhatsApp = (fat: FaturaAluno) => {
     if (!fat.telefoneAluno) { alert(`${fat.nomeAluno} não tem telefone cadastrado.`); return; }

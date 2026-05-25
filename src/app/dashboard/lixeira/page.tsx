@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2, RotateCcw, AlertTriangle, Archive, FileText, CalendarDays, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { registrarAuditoria } from '@/lib/audit-log';
+import type { AgendamentoStatus, TipoRegistro } from '@/types/domain';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +23,7 @@ interface EvolucaoArquivada {
   aluno_id: string;
   nomeAluno: string;
   data: string;
-  tipo_registro: string;
+  tipo_registro: TipoRegistro;
   relatorio: string;
   deleted_at: string;
 }
@@ -33,7 +34,7 @@ interface AgendamentoArquivado {
   nomeAluno: string;
   data: string;
   horario: string;
-  status: string;
+  status: AgendamentoStatus;
   valor_sessao: number;
   deleted_at: string;
 }
@@ -45,82 +46,112 @@ interface ConfirmacaoState {
   nome: string;
 }
 
+type ModalState =
+  | { fase: 'idle' }
+  | { fase: 'confirming'; item: ConfirmacaoState }
+  | { fase: 'processing'; item: ConfirmacaoState }
+  | { fase: 'error'; mensagem: string };
+
+type ModalAction =
+  | { type: 'ABRIR_MODAL'; item: ConfirmacaoState }
+  | { type: 'FECHAR_MODAL' }
+  | { type: 'CONFIRMAR' }
+  | { type: 'SUCESSO' }
+  | { type: 'ERRO'; mensagem: string };
+
+function modalReducer(state: ModalState, action: ModalAction): ModalState {
+  switch (action.type) {
+    case 'ABRIR_MODAL': return { fase: 'confirming', item: action.item };
+    case 'FECHAR_MODAL': return { fase: 'idle' };
+    case 'CONFIRMAR':
+      return state.fase === 'confirming' ? { fase: 'processing', item: state.item } : state;
+    case 'SUCESSO': return { fase: 'idle' };
+    case 'ERRO': return { fase: 'error', mensagem: action.mensagem };
+    default: return state;
+  }
+}
+
 export default function Lixeira() {
   const router = useRouter();
   const [carregando, setCarregando] = useState(true);
   const [alunos, setAlunos] = useState<AlunoArquivado[]>([]);
   const [evolucoes, setEvolucoes] = useState<EvolucaoArquivada[]>([]);
   const [agendamentos, setAgendamentos] = useState<AgendamentoArquivado[]>([]);
-  const [confirmacao, setConfirmacao] = useState<ConfirmacaoState | null>(null);
-  const [processando, setProcessando] = useState(false);
-  const [erroRestaurar, setErroRestaurar] = useState<string | null>(null);
+  const [modal, dispatch] = useReducer(modalReducer, { fase: 'idle' });
+  const [tick, setTick] = useState(0);
 
-  async function carregar() {
-    setCarregando(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { router.push('/login'); return; }
+  useEffect(() => {
+    let cancelled = false;
 
-    const [{ data: alunosData }, { data: evolucoesData }, { data: agendamentosData }] = await Promise.all([
-      supabase
-        .from('alunos')
-        .select('id, nome, email, telefone, deleted_at')
-        .eq('user_id', session.user.id)
-        .not('deleted_at', 'is', null)
-        .order('deleted_at', { ascending: false }),
+    async function carregar() {
+      setCarregando(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push('/login'); return; }
 
-      supabase
-        .from('evolucoes')
-        .select('id, aluno_id, data, tipo_registro, relatorio, deleted_at, alunos(nome)')
-        .eq('user_id', session.user.id)
-        .not('deleted_at', 'is', null)
-        .order('deleted_at', { ascending: false }),
+      const [{ data: alunosData }, { data: evolucoesData }, { data: agendamentosData }] = await Promise.all([
+        supabase
+          .from('alunos')
+          .select('id, nome, email, telefone, deleted_at')
+          .eq('user_id', session.user.id)
+          .not('deleted_at', 'is', null)
+          .order('deleted_at', { ascending: false }),
 
-      supabase
-        .from('agendamentos')
-        .select('id, aluno_id, data, horario, status, valor_sessao, deleted_at, alunos(nome)')
-        .eq('user_id', session.user.id)
-        .not('deleted_at', 'is', null)
-        .order('deleted_at', { ascending: false }),
-    ]);
+        supabase
+          .from('evolucoes')
+          .select('id, aluno_id, data, tipo_registro, relatorio, deleted_at, alunos(nome)')
+          .eq('user_id', session.user.id)
+          .not('deleted_at', 'is', null)
+          .order('deleted_at', { ascending: false }),
 
-    setAlunos((alunosData || []) as AlunoArquivado[]);
-    setEvolucoes(
-      (evolucoesData || []).map((e) => ({
-        id: e.id,
-        aluno_id: e.aluno_id,
-        nomeAluno: (Array.isArray(e.alunos) ? e.alunos[0]?.nome : (e.alunos as { nome: string } | null)?.nome) || 'Aluno removido',
-        data: e.data,
-        tipo_registro: e.tipo_registro,
-        relatorio: e.relatorio,
-        deleted_at: e.deleted_at,
-      }))
-    );
-    setAgendamentos(
-      (agendamentosData || []).map((a) => ({
-        id: a.id,
-        aluno_id: a.aluno_id,
-        nomeAluno: (Array.isArray(a.alunos) ? a.alunos[0]?.nome : (a.alunos as { nome: string } | null)?.nome) || 'Aluno removido',
-        data: a.data,
-        horario: a.horario,
-        status: a.status,
-        valor_sessao: Number(a.valor_sessao) || 0,
-        deleted_at: a.deleted_at,
-      }))
-    );
-    setCarregando(false);
-  }
+        supabase
+          .from('agendamentos')
+          .select('id, aluno_id, data, horario, status, valor_sessao, deleted_at, alunos(nome)')
+          .eq('user_id', session.user.id)
+          .not('deleted_at', 'is', null)
+          .order('deleted_at', { ascending: false }),
+      ]);
 
-  useEffect(() => { carregar(); }, [router]);
+      if (cancelled) return;
+
+      setAlunos((alunosData || []) as AlunoArquivado[]);
+      setEvolucoes(
+        (evolucoesData || []).map((e) => ({
+          id: e.id,
+          aluno_id: e.aluno_id,
+          nomeAluno: (Array.isArray(e.alunos) ? e.alunos[0]?.nome : (e.alunos as { nome: string } | null)?.nome) || 'Aluno removido',
+          data: e.data,
+          tipo_registro: e.tipo_registro,
+          relatorio: e.relatorio,
+          deleted_at: e.deleted_at,
+        }))
+      );
+      setAgendamentos(
+        (agendamentosData || []).map((a) => ({
+          id: a.id,
+          aluno_id: a.aluno_id,
+          nomeAluno: (Array.isArray(a.alunos) ? a.alunos[0]?.nome : (a.alunos as { nome: string } | null)?.nome) || 'Aluno removido',
+          data: a.data,
+          horario: a.horario,
+          status: a.status,
+          valor_sessao: Number(a.valor_sessao) || 0,
+          deleted_at: a.deleted_at,
+        }))
+      );
+      setCarregando(false);
+    }
+
+    carregar();
+    return () => { cancelled = true; };
+  }, [router, tick]);
 
   async function confirmarAcao() {
-    if (!confirmacao) return;
-    setProcessando(true);
-    setErroRestaurar(null);
+    if (modal.fase !== 'confirming') return;
+    const { tipo, entidade, id, nome } = modal.item;
+    dispatch({ type: 'CONFIRMAR' });
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { tipo, entidade, id, nome } = confirmacao;
     const tabela = entidade === 'aluno' ? 'alunos'
                  : entidade === 'evolucao' ? 'evolucoes'
                  : 'agendamentos';
@@ -130,11 +161,10 @@ export default function Lixeira() {
       if (error) {
         // 23505 = unique_violation (outro agendamento ativo já ocupa o mesmo slot)
         if (error.code === '23505') {
-          setErroRestaurar(`Não foi possível restaurar: já existe outro agendamento ativo neste mesmo dia/horário.`);
+          dispatch({ type: 'ERRO', mensagem: 'Não foi possível restaurar: já existe outro agendamento ativo neste mesmo dia/horário.' });
         } else {
-          setErroRestaurar('Erro ao restaurar: ' + error.message);
+          dispatch({ type: 'ERRO', mensagem: 'Erro ao restaurar: ' + error.message });
         }
-        setProcessando(false);
         return;
       }
       await registrarAuditoria({ acao: 'update', entidade, entidadeId: id, detalhes: { acao: 'restaurar', nome } });
@@ -143,9 +173,8 @@ export default function Lixeira() {
       await registrarAuditoria({ acao: 'delete', entidade, entidadeId: id, detalhes: { acao: 'exclusao_permanente', nome } });
     }
 
-    setConfirmacao(null);
-    setProcessando(false);
-    carregar();
+    dispatch({ type: 'SUCESSO' });
+    setTick(t => t + 1);
   }
 
   function formatarData(iso: string) {
@@ -165,58 +194,58 @@ export default function Lixeira() {
         </p>
       </header>
 
-      {erroRestaurar && (
+      {modal.fase === 'error' && (
         <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 text-sm font-medium text-rose-700 flex items-start gap-2 animate-fade-in">
           <AlertTriangle className="size-4 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="font-bold">Restauração bloqueada</p>
-            <p className="text-xs mt-0.5">{erroRestaurar}</p>
+            <p className="text-xs mt-0.5">{modal.mensagem}</p>
           </div>
-          <button type="button" onClick={() => setErroRestaurar(null)} className="text-rose-500 hover:text-rose-700 text-xs font-bold">Fechar</button>
+          <button type="button" onClick={() => dispatch({ type: 'FECHAR_MODAL' })} className="text-rose-500 hover:text-rose-700 text-xs font-bold">Fechar</button>
         </div>
       )}
 
       {/* Modal de confirmação */}
-      {confirmacao && (
+      {(modal.fase === 'confirming' || modal.fase === 'processing') && (
         <div
           className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setConfirmacao(null)}
+          onClick={() => dispatch({ type: 'FECHAR_MODAL' })}
         >
           <div
             className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3">
-              <div className={`size-10 rounded-xl flex items-center justify-center ${confirmacao.tipo === 'deletar' ? 'bg-rose-100' : 'bg-violet-100'}`}>
-                {confirmacao.tipo === 'deletar'
+              <div className={`size-10 rounded-xl flex items-center justify-center ${modal.item.tipo === 'deletar' ? 'bg-rose-100' : 'bg-violet-100'}`}>
+                {modal.item.tipo === 'deletar'
                   ? <AlertTriangle className="size-5 text-rose-600" />
                   : <RotateCcw className="size-5 text-violet-600" />
                 }
               </div>
               <div>
                 <h3 className="font-extrabold text-sm">
-                  {confirmacao.tipo === 'deletar' ? 'Excluir permanentemente?' : 'Restaurar registro?'}
+                  {modal.item.tipo === 'deletar' ? 'Excluir permanentemente?' : 'Restaurar registro?'}
                 </h3>
-                <p className="text-xs text-[var(--color-muted-foreground)]">{confirmacao.nome}</p>
+                <p className="text-xs text-[var(--color-muted-foreground)]">{modal.item.nome}</p>
               </div>
             </div>
-            {confirmacao.tipo === 'deletar' && (
+            {modal.item.tipo === 'deletar' && (
               <p className="text-xs text-rose-600 bg-rose-50 p-3 rounded-xl">
                 Esta ação é irreversível. O registro será apagado definitivamente do sistema.
               </p>
             )}
             <div className="flex gap-2 pt-1">
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => setConfirmacao(null)} disabled={processando}>
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => dispatch({ type: 'FECHAR_MODAL' })} disabled={modal.fase === 'processing'}>
                 Cancelar
               </Button>
               <Button
-                variant={confirmacao.tipo === 'deletar' ? 'destructive' : 'primary'}
+                variant={modal.item.tipo === 'deletar' ? 'destructive' : 'primary'}
                 size="sm"
                 className="flex-1"
                 onClick={confirmarAcao}
-                disabled={processando}
+                disabled={modal.fase === 'processing'}
               >
-                {processando ? 'Aguarde...' : confirmacao.tipo === 'deletar' ? 'Excluir' : 'Restaurar'}
+                {modal.fase === 'processing' ? 'Aguarde...' : modal.item.tipo === 'deletar' ? 'Excluir' : 'Restaurar'}
               </Button>
             </div>
           </div>
@@ -274,7 +303,7 @@ export default function Lixeira() {
                       <button
                         type="button"
                         title="Restaurar aluno"
-                        onClick={() => setConfirmacao({ tipo: 'restaurar', entidade: 'aluno', id: aluno.id, nome: aluno.nome })}
+                        onClick={() => dispatch({ type: 'ABRIR_MODAL', item: { tipo: 'restaurar', entidade: 'aluno', id: aluno.id, nome: aluno.nome } })}
                         className="size-9 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 flex items-center justify-center transition-colors"
                       >
                         <RotateCcw className="size-4 text-violet-600" />
@@ -282,7 +311,7 @@ export default function Lixeira() {
                       <button
                         type="button"
                         title="Excluir permanentemente"
-                        onClick={() => setConfirmacao({ tipo: 'deletar', entidade: 'aluno', id: aluno.id, nome: aluno.nome })}
+                        onClick={() => dispatch({ type: 'ABRIR_MODAL', item: { tipo: 'deletar', entidade: 'aluno', id: aluno.id, nome: aluno.nome } })}
                         className="size-9 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 flex items-center justify-center transition-colors"
                       >
                         <Trash2 className="size-4 text-rose-600" />
@@ -334,7 +363,7 @@ export default function Lixeira() {
                         <button
                           type="button"
                           title="Restaurar evolução"
-                          onClick={() => setConfirmacao({ tipo: 'restaurar', entidade: 'evolucao', id: ev.id, nome: `Evolução de ${ev.nomeAluno} (${new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')})` })}
+                          onClick={() => dispatch({ type: 'ABRIR_MODAL', item: { tipo: 'restaurar', entidade: 'evolucao', id: ev.id, nome: `Evolução de ${ev.nomeAluno} (${new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')})` } })}
                           className="size-9 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 flex items-center justify-center transition-colors"
                         >
                           <RotateCcw className="size-4 text-violet-600" />
@@ -342,7 +371,7 @@ export default function Lixeira() {
                         <button
                           type="button"
                           title="Excluir permanentemente"
-                          onClick={() => setConfirmacao({ tipo: 'deletar', entidade: 'evolucao', id: ev.id, nome: `Evolução de ${ev.nomeAluno} (${new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')})` })}
+                          onClick={() => dispatch({ type: 'ABRIR_MODAL', item: { tipo: 'deletar', entidade: 'evolucao', id: ev.id, nome: `Evolução de ${ev.nomeAluno} (${new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR')})` } })}
                           className="size-9 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 flex items-center justify-center transition-colors"
                         >
                           <Trash2 className="size-4 text-rose-600" />
@@ -399,7 +428,7 @@ export default function Lixeira() {
                         <button
                           type="button"
                           title="Restaurar agendamento"
-                          onClick={() => setConfirmacao({ tipo: 'restaurar', entidade: 'agendamento', id: ag.id, nome: nomeBonito })}
+                          onClick={() => dispatch({ type: 'ABRIR_MODAL', item: { tipo: 'restaurar', entidade: 'agendamento', id: ag.id, nome: nomeBonito } })}
                           className="size-9 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 flex items-center justify-center transition-colors"
                         >
                           <RotateCcw className="size-4 text-violet-600" />
@@ -407,7 +436,7 @@ export default function Lixeira() {
                         <button
                           type="button"
                           title="Excluir permanentemente"
-                          onClick={() => setConfirmacao({ tipo: 'deletar', entidade: 'agendamento', id: ag.id, nome: nomeBonito })}
+                          onClick={() => dispatch({ type: 'ABRIR_MODAL', item: { tipo: 'deletar', entidade: 'agendamento', id: ag.id, nome: nomeBonito } })}
                           className="size-9 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 flex items-center justify-center transition-colors"
                         >
                           <Trash2 className="size-4 text-rose-600" />

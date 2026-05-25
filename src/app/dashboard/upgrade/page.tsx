@@ -7,6 +7,7 @@ import {
   Sparkles, Lock, Calendar,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useSubscription } from '@/context/subscription';
 import { isValidCpfCnpj } from '@/lib/cpf-cnpj';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -61,9 +62,10 @@ function fmtCartao(v: string) {
 
 export default function UpgradePage() {
   const router = useRouter();
+  const { sub: subCtx } = useSubscription();
   const [carregando, setCarregando] = useState(true);
   const [plano, setPlano] = useState<Plano>('PROFISSIONAL');
-  const [statusAtual, setStatusAtual] = useState<{ status: string; diasRestantesTrial: number | null } | null>(null);
+  const statusAtual = subCtx ? { status: subCtx.status, diasRestantesTrial: subCtx.diasRestantesTrial } : null;
 
   // Titular
   const [nome, setNome] = useState('');
@@ -89,17 +91,7 @@ export default function UpgradePage() {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
-
       setEmail(user.email || '');
-
-      const res = await fetch('/api/billing/status');
-      const data = await res.json();
-      if (data.ok && data.subscription) {
-        setStatusAtual({
-          status: data.subscription.status,
-          diasRestantesTrial: data.subscription.diasRestantesTrial,
-        });
-      }
       setCarregando(false);
     }
     init();

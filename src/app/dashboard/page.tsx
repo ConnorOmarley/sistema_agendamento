@@ -13,6 +13,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useUser } from '@/context/user';
 import LembretesConsultas from '@/components/LembretesConsultas';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,14 +36,16 @@ interface Contadores {
 
 export default function DashboardPrincipal() {
   const router = useRouter();
+  const userInfo = useUser();
   const [carregando, setCarregando] = useState(true);
-  const [nomeUsuario, setNomeUsuario] = useState('');
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [busca, setBusca] = useState('');
   const [nomeNovoAluno, setNomeNovoAluno] = useState('');
   const [metricas, setMetricas] = useState<Contadores>({
     faturamentoPago: 0, totalAlunos: 0, agendados: 0, concluidos: 0, faltas: 0,
   });
+
+  const nomeUsuario = userInfo ? String(userInfo.displayName).split(/\s+/)[0] : '';
 
   useEffect(() => {
     async function carregarDashboardCompleto() {
@@ -51,12 +54,6 @@ export default function DashboardPrincipal() {
         router.push('/login');
         return;
       }
-      // Fallback: display_name (custom) -> full_name/name (Google OAuth) -> prefixo do email
-      const md = session.user.user_metadata || {};
-      const nomeCompleto = md.display_name || md.full_name || md.name || session.user.email?.split('@')[0] || 'Profissional';
-      // Mostra só o primeiro nome pra ficar amigável
-      const primeiroNome = String(nomeCompleto).split(/\s+/)[0];
-      setNomeUsuario(primeiroNome);
 
       const { data: listaAlunos } = await supabase
         .from('alunos')

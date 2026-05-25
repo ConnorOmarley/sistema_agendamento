@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { registrarAuditoria } from '@/lib/audit-log';
+import type { TipoRegistro } from '@/types/domain';
 import { Card } from '@/components/ui/card';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,16 +34,15 @@ interface Aluno {
 interface Evolucao {
   id: string;
   data: string;
-  tipo_registro: string;
+  tipo_registro: TipoRegistro;
   relatorio: string;
 }
 
 interface Params { id: string }
 
-export default function PerfilAluno({ params }: { params: Promise<Params> | Params }) {
+export default function PerfilAluno({ params }: { params: Promise<Params> }) {
   const router = useRouter();
-  const resolvedParams = 'then' in params ? use(params) : params;
-  const alunoId = resolvedParams.id;
+  const { id: alunoId } = use(params);
 
   const [carregando, setCarregando] = useState(true);
   const [aluno, setAluno] = useState<Aluno | null>(null);
@@ -53,69 +53,74 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
   const [telefone, setTelefone] = useState('');
   const [contatoResponsavel, setContatoResponsavel] = useState(false);
 
-  const [tipoRegistro, setTipoRegistro] = useState('Sessão Comum');
+  const [tipoRegistro, setTipoRegistro] = useState<TipoRegistro>('Sessão Comum');
   const [relatorio, setRelatorio] = useState('');
   const [alertaSucesso, setAlertaSucesso] = useState(false);
 
   const dataAtual = new Date();
   const [mesFiltro, setMesFiltro] = useState(String(dataAtual.getMonth() + 1).padStart(2, '0'));
   const [anoFiltro, setAnoFiltro] = useState(String(dataAtual.getFullYear()));
-  const [consultasPeriodo, setConsultasPeriodo] = useState(0);
-  const [totalPago, setTotalPago] = useState(0);
-  const [aReceber, setAReceber] = useState(0);
+  const [financeiro, setFinanceiro] = useState({ consultasPeriodo: 0, totalPago: 0, aReceber: 0 });
 
-  async function carregarDadosAluno() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { router.push('/login'); return; }
+  useEffect(() => {
+    let cancelled = false;
 
-    const { data: dadosAluno } = await supabase
-      .from('alunos')
-      .select('id, nome, email, telefone, contato_responsavel')
-      .eq('id', alunoId)
-      .eq('user_id', session.user.id)
-      .single();
+    async function carregarDadosAluno() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push('/login'); return; }
 
-    if (!dadosAluno) { router.push('/dashboard'); return; }
+      const { data: dadosAluno } = await supabase
+        .from('alunos')
+        .select('id, nome, email, telefone, contato_responsavel')
+        .eq('id', alunoId)
+        .eq('user_id', session.user.id)
+        .single();
 
-    setAluno(dadosAluno);
-    setNome(dadosAluno.nome);
-    setEmail(dadosAluno.email || '');
-    setTelefone(dadosAluno.telefone || '');
-    setContatoResponsavel(dadosAluno.contato_responsavel || false);
+      if (!dadosAluno) { router.push('/dashboard'); return; }
 
-    const { data: listaEvolucoes } = await supabase
-      .from('evolucoes')
-      .select('id, data, tipo_registro, relatorio')
-      .eq('aluno_id', alunoId)
-      .eq('user_id', session.user.id)
-      .is('deleted_at', null)
-      .order('data', { ascending: false });
+      if (!cancelled) {
+        setAluno(dadosAluno);
+        setNome(dadosAluno.nome);
+        setEmail(dadosAluno.email || '');
+        setTelefone(dadosAluno.telefone || '');
+        setContatoResponsavel(dadosAluno.contato_responsavel || false);
+      }
 
-    setEvolucoes(listaEvolucoes || []);
+      const { data: listaEvolucoes } = await supabase
+        .from('evolucoes')
+        .select('id, data, tipo_registro, relatorio')
+        .eq('aluno_id', alunoId)
+        .eq('user_id', session.user.id)
+        .is('deleted_at', null)
+        .order('data', { ascending: false });
 
-    // LGPD: registra acesso ao prontuário do aluno (visualização de dados clínicos)
-    registrarAuditoria({ acao: 'view', entidade: 'aluno', entidadeId: alunoId });
+      if (!cancelled) setEvolucoes(listaEvolucoes || []);
 
-    const { data: agendamentos } = await supabase
-      .from('agendamentos')
-      .select('status, valor_sessao, status_pagamento, data')
-      .eq('aluno_id', alunoId)
-      .eq('user_id', session.user.id)
-      .is('deleted_at', null);
+      // LGPD: registra acesso ao prontuário do aluno (visualização de dados clínicos)
+      registrarAuditoria({ acao: 'view', entidade: 'aluno', entidadeId: alunoId });
 
-    const validos = agendamentos || [];
-    const prefixo = `${anoFiltro}-${mesFiltro}`;
-    const sessoes = validos.filter(ag => ag.data.startsWith(prefixo) && ag.status !== 'Faltou');
-    const pago = sessoes.filter(ag => ag.status_pagamento === 'Pago').reduce((s, ag) => s + (Number(ag.valor_sessao) || 0), 0);
-    const pendente = sessoes.filter(ag => ag.status_pagamento === 'Pendente').reduce((s, ag) => s + (Number(ag.valor_sessao) || 0), 0);
+      const { data: agendamentos } = await supabase
+        .from('agendamentos')
+        .select('status, valor_sessao, status_pagamento, data')
+        .eq('aluno_id', alunoId)
+        .eq('user_id', session.user.id)
+        .is('deleted_at', null);
 
-    setConsultasPeriodo(sessoes.length);
-    setTotalPago(pago);
-    setAReceber(pendente);
-    setCarregando(false);
-  }
+      if (cancelled) return;
 
-  useEffect(() => { carregarDadosAluno(); }, [alunoId, mesFiltro, anoFiltro]);
+      const validos = agendamentos || [];
+      const prefixo = `${anoFiltro}-${mesFiltro}`;
+      const sessoes = validos.filter(ag => ag.data.startsWith(prefixo) && ag.status !== 'Faltou');
+      const totalPago = sessoes.filter(ag => ag.status_pagamento === 'Pago').reduce((s, ag) => s + (Number(ag.valor_sessao) || 0), 0);
+      const aReceber = sessoes.filter(ag => ag.status_pagamento === 'Pendente').reduce((s, ag) => s + (Number(ag.valor_sessao) || 0), 0);
+
+      setFinanceiro({ consultasPeriodo: sessoes.length, totalPago, aReceber });
+      setCarregando(false);
+    }
+
+    carregarDadosAluno();
+    return () => { cancelled = true; };
+  }, [alunoId, mesFiltro, anoFiltro, router]);
 
   async function handleSalvarFicha(e: React.FormEvent) {
     e.preventDefault();
@@ -265,15 +270,15 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
             <div className="space-y-2 pt-1">
               <div className="rounded-xl bg-sky-50 px-3 py-2.5 flex items-center justify-between">
                 <span className="text-xs font-bold text-sky-700">Consultas no período</span>
-                <span className="font-black text-sky-900">{consultasPeriodo}</span>
+                <span className="font-black text-sky-900">{financeiro.consultasPeriodo}</span>
               </div>
               <div className="rounded-xl bg-emerald-50 px-3 py-2.5 flex items-center justify-between">
                 <span className="text-xs font-bold text-emerald-700">Total pago</span>
-                <span className="font-black text-emerald-900">R$ {totalPago.toFixed(2)}</span>
+                <span className="font-black text-emerald-900">R$ {financeiro.totalPago.toFixed(2)}</span>
               </div>
               <div className="rounded-xl bg-rose-50 px-3 py-2.5 flex items-center justify-between">
                 <span className="text-xs font-bold text-rose-700">A receber</span>
-                <span className="font-black text-rose-900">R$ {aReceber.toFixed(2)}</span>
+                <span className="font-black text-rose-900">R$ {financeiro.aReceber.toFixed(2)}</span>
               </div>
             </div>
           </Card>
@@ -344,7 +349,7 @@ export default function PerfilAluno({ params }: { params: Promise<Params> | Para
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="evol-tipo">Tipo</Label>
-                  <Select id="evol-tipo" value={tipoRegistro} onChange={(e) => setTipoRegistro(e.target.value)}>
+                  <Select id="evol-tipo" value={tipoRegistro} onChange={(e) => setTipoRegistro(e.target.value as TipoRegistro)}>
                     <option value="Sessão Comum">Sessão Comum</option>
                     <option value="Avaliação Física">Avaliação Física</option>
                     <option value="Alta Clínica">Alta Clínica</option>

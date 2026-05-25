@@ -8,7 +8,7 @@
 import { createAdminClient } from './supabase-admin';
 import { createCustomer } from './asaas/customers';
 import { createCreditCardSubscription, cancelSubscription as asaasCancelSub } from './asaas/subscriptions';
-import type { AsaasCreditCardData, AsaasCreditCardHolderInfo } from './asaas/types';
+import type { AsaasCreditCardData, AsaasCreditCardHolderInfo, AsaasWebhookPayload } from './asaas/types';
 
 export type SubscriptionStatus =
   | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'BLOCKED' | 'CANCELED' | 'EXPIRED';
@@ -200,7 +200,7 @@ export async function logSubscriptionEvent(
   subscriptionId: string | null,
   userId: string | null,
   eventType: string,
-  payload: Record<string, unknown>
+  payload: AsaasWebhookPayload
 ): Promise<void> {
   const admin = createAdminClient();
   await admin.from('subscription_events').insert({

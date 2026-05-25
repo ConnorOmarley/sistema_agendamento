@@ -3,8 +3,17 @@
 import { useEffect, useState } from 'react';
 import { Bell, MessageCircle, CheckCheck, Clock, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import type { AgendamentoStatus } from '@/types/domain';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+
+type AgRaw = {
+  id: string;
+  horario: string | null;
+  aluno_id: string;
+  status: AgendamentoStatus;
+  alunos: { nome: string; telefone: string | null; contato_responsavel: boolean } | null;
+};
 
 interface AgendamentoAmanha {
   id: string;
@@ -59,12 +68,6 @@ export default function LembretesConsultas() {
       .not('status', 'eq', 'Faltou');
 
     if (listaAgendamentos) {
-      type AgRaw = {
-        id: string;
-        horario: string | null;
-        aluno_id: string;
-        alunos: { nome: string; telefone: string | null; contato_responsavel: boolean } | null;
-      };
       const mapeados: AgendamentoAmanha[] = (listaAgendamentos as unknown as AgRaw[]).map((ag) => ({
         id: ag.id,
         horario: ag.horario ? ag.horario.substring(0, 5) : '--:--',

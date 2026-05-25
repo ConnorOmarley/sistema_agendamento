@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
 import {
   LayoutDashboard,
   CalendarDays,
@@ -17,6 +18,7 @@ import {
   Crown,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useUser } from '@/context/user';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -42,14 +44,8 @@ const ACCOUNT_NAV: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState('');
+  const userInfo = useUser();
   const [aberto, setAberto] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email) setUserEmail(data.user.email);
-    });
-  }, []);
 
   useEffect(() => {
     setAberto(false);
@@ -120,7 +116,7 @@ export function Sidebar() {
             <div className="mt-auto space-y-1 pt-4 border-t">
               <div className="px-2 pb-2">
                 <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)] font-bold">Conta</p>
-                <p className="text-xs font-medium truncate">{userEmail}</p>
+                <p className="text-xs font-medium truncate">{userInfo?.email}</p>
               </div>
               {ACCOUNT_NAV.map((item) => {
                 const Icon = item.icon;
@@ -191,7 +187,7 @@ export function Sidebar() {
         <div className="mt-auto space-y-2">
           <div className="rounded-2xl bg-white/60 border border-white/60 p-3 shadow-sm">
             <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)] font-bold">Logada como</p>
-            <p className="text-xs font-medium truncate mt-0.5">{userEmail || 'Carregando...'}</p>
+            <p className="text-xs font-medium truncate mt-0.5">{userInfo?.email || 'Carregando...'}</p>
           </div>
 
           <div className="space-y-0.5">

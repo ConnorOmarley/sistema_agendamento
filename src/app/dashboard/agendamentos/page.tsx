@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { registrarAuditoria } from '@/lib/audit-log';
+import type { AgendamentoStatus, StatusPagamento } from '@/types/domain';
 import { Card } from '@/components/ui/card';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,9 +28,9 @@ interface Agendamento {
   id: string;
   data: string;
   horario: string;
-  status: string;
+  status: AgendamentoStatus;
   valor_sessao: number;
-  status_pagamento: string;
+  status_pagamento: StatusPagamento;
   observacoes: string | null;
   alunos: { id: string; nome: string } | null;
 }
@@ -56,33 +57,41 @@ export default function AgendaGeral() {
   const [modoManual, setModoManual] = useState(false);
   const [erroForm, setErroForm] = useState<string | null>(null);
   const [enviarEmail, setEnviarEmail] = useState(true);
+  const [reloadTick, setReloadTick] = useState(0);
 
-  async function carregarDadosAgenda() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { router.push('/login'); return; }
+  useEffect(() => {
+    let cancelled = false;
 
-    const { data: listaAlunos } = await supabase
-      .from('alunos')
-      .select('id, nome, email')
-      .eq('user_id', session.user.id)
-      .is('deleted_at', null)
-      .order('nome', { ascending: true });
+    async function carregarDadosAgenda() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push('/login'); return; }
 
-    if (listaAlunos) setAlunos(listaAlunos);
+      const { data: listaAlunos } = await supabase
+        .from('alunos')
+        .select('id, nome, email')
+        .eq('user_id', session.user.id)
+        .is('deleted_at', null)
+        .order('nome', { ascending: true });
 
-    const { data: listaAgendamentos } = await supabase
-      .from('agendamentos')
-      .select(`id, data, horario, status, valor_sessao, status_pagamento, observacoes, alunos (id, nome)`)
-      .eq('user_id', session.user.id)
-      .is('deleted_at', null)
-      .order('data', { ascending: false })
-      .order('horario', { ascending: true });
+      if (!cancelled && listaAlunos) setAlunos(listaAlunos);
 
-    if (listaAgendamentos) setAgendamentos(listaAgendamentos as unknown as Agendamento[]);
-    setCarregando(false);
-  }
+      const { data: listaAgendamentos } = await supabase
+        .from('agendamentos')
+        .select(`id, data, horario, status, valor_sessao, status_pagamento, observacoes, alunos (id, nome)`)
+        .eq('user_id', session.user.id)
+        .is('deleted_at', null)
+        .order('data', { ascending: false })
+        .order('horario', { ascending: true });
 
-  useEffect(() => { carregarDadosAgenda(); }, [router]);
+      if (!cancelled) {
+        if (listaAgendamentos) setAgendamentos(listaAgendamentos as unknown as Agendamento[]);
+        setCarregando(false);
+      }
+    }
+
+    carregarDadosAgenda();
+    return () => { cancelled = true; };
+  }, [router, reloadTick]);
 
   useEffect(() => {
     if (!dataSessao) { setHorariosOcupadosNoDia([]); return; }
@@ -133,7 +142,7 @@ export default function AgendaGeral() {
     }
 
     setAlunoSelecionado(''); setDataSessao(''); setHorarioSessao(''); setObsSessao(''); setModoManual(false);
-    carregarDadosAgenda();
+    setReloadTick(t => t + 1);
   }
 
   async function atualizarAgendamento(id: string, campo: 'status' | 'status_pagamento', valor: string) {

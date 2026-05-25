@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
   // 2. Gate admin — usa app_metadata (só gravável via service role).
   //    user_metadata é gravável pelo próprio usuário e NÃO deve ser usado para gates de privilégio.
-  const isAdmin = (user.app_metadata as { is_admin?: boolean } | null)?.is_admin === true;
+  const isAdmin = (user.app_metadata as import('@/types/domain').SupabaseAppMetadata | null)?.is_admin === true;
   if (!isAdmin) {
     return NextResponse.json({ ok: false, error: 'Acesso restrito a administradores' }, { status: 403 });
   }

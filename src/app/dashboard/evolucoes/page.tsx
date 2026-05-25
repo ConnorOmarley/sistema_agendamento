@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Search, FileText, User, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { registrarAuditoria } from '@/lib/audit-log';
+import type { TipoRegistro } from '@/types/domain';
+import { usePageData } from '@/hooks/usePageData';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -13,36 +14,28 @@ import { Badge } from '@/components/ui/badge';
 interface EvolucaoGeral {
   id: string;
   data: string;
-  tipo_registro: string;
+  tipo_registro: TipoRegistro;
   relatorio: string;
   alunos: { id: string; nome: string } | null;
 }
 
 export default function EvolucoesGeral() {
-  const router = useRouter();
-  const [carregando, setCarregando] = useState(true);
-  const [evolucoes, setEvolucoes] = useState<EvolucaoGeral[]>([]);
   const [busca, setBusca] = useState('');
 
-  useEffect(() => {
-    async function carregarTodasEvolucoes() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.push('/login'); return; }
-
+  const { data: evolucoes, carregando, reload } = usePageData<EvolucaoGeral[]>(
+    async (userId) => {
       const { data } = await supabase
         .from('evolucoes')
         .select(`id, data, tipo_registro, relatorio, alunos (id, nome)`)
-        .eq('user_id', session.user.id)
+        .eq('user_id', userId)
         .is('deleted_at', null)
         .order('data', { ascending: false });
+      return (data as unknown as EvolucaoGeral[]) ?? [];
+    },
+  );
 
-      if (data) setEvolucoes(data as unknown as EvolucaoGeral[]);
-      setCarregando(false);
-    }
-    carregarTodasEvolucoes();
-  }, [router]);
-
-  const evolucoesFiltradas = evolucoes.filter((ev) => {
+  const lista = evolucoes ?? [];
+  const evolucoesFiltradas = lista.filter((ev) => {
     const termo = busca.toLowerCase();
     const nome = ev.alunos?.nome.toLowerCase() || '';
     return nome.includes(termo) || ev.relatorio.toLowerCase().includes(termo);
@@ -55,13 +48,13 @@ export default function EvolucoesGeral() {
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
     if (!error) {
-      setEvolucoes(atual => atual.filter(ev => ev.id !== id));
       registrarAuditoria({
         acao: 'delete',
         entidade: 'evolucao',
         entidadeId: id,
         detalhes: { acao: 'soft_delete', aluno_nome: nomeAluno },
       });
+      reload();
     }
   }
 
@@ -100,7 +93,7 @@ export default function EvolucoesGeral() {
           <Card className="p-16 text-center">
             <FileText className="size-12 mx-auto text-[var(--color-muted-foreground)] opacity-30 mb-3" />
             <p className="text-sm text-[var(--color-muted-foreground)] italic">
-              {evolucoes.length === 0 ? 'Nenhuma evolução registrada ainda. Vá no perfil de um aluno para criar a primeira.' : 'Nenhum registro corresponde à busca.'}
+              {lista.length === 0 ? 'Nenhuma evolução registrada ainda. Vá no perfil de um aluno para criar a primeira.' : 'Nenhum registro corresponde à busca.'}
             </p>
           </Card>
         ) : (
