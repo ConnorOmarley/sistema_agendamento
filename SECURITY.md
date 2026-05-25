@@ -28,7 +28,7 @@ Comando pra verificar: `npm ls postcss` deve mostrar apenas `postcss@≥8.5.10`.
 - Webhook idempotente (checa `payment.id` em `subscription_events`)
 - CPF validado por Mod 11
 - Senha mínima 8 chars (padrão Google)
-- Cartão de crédito nunca persistido (vai direto pro Asaas via SSL)
+- Cartão de crédito nunca persistido nem logado (rota repassa para o Asaas via SSL, Asaas não oferece SDK client-side de tokenização)
 - Service role key apenas server-side
 - Consent LGPD explícito no signup com timestamp
 
