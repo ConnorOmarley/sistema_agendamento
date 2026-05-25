@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -63,6 +63,8 @@ export default function FechamentoMensal() {
   const [modoLoteAtivo, setModoLoteAtivo] = useState(false);
   const [alunoIdFocoAtual, setAlunoIdFocoAtual] = useState<string | null>(null);
   const [idsAlunosCobrados, setIdsAlunosCobrados] = useState<string[]>([]);
+  // Set derivado: lookup O(1) no render em vez de O(n) Array.includes() por fatura
+  const idsAlunosCobradosSet = useMemo(() => new Set(idsAlunosCobrados), [idsAlunosCobrados]);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,7 +173,7 @@ export default function FechamentoMensal() {
     const numeroFormatado = numeroLimpo.length === 11 ? `55${numeroLimpo}` : numeroLimpo;
     window.open(`https://api.whatsapp.com/send?phone=${numeroFormatado}&text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
 
-    if (!idsAlunosCobrados.includes(fat.alunoId)) setIdsAlunosCobrados(p => [...p, fat.alunoId]);
+    if (!idsAlunosCobradosSet.has(fat.alunoId)) setIdsAlunosCobrados(p => [...p, fat.alunoId]);
 
     if (modoLoteAtivo) {
       const pendentes = faturas.filter(f => f.valorTotal > 0 && f.statusFinal !== 'Pago' && f.telefoneAluno);
@@ -300,7 +302,7 @@ export default function FechamentoMensal() {
           <div className="divide-y divide-[var(--color-border)]">
             {faturas.map((fat) => {
               const isAlvo = modoLoteAtivo && alunoIdFocoAtual === fat.alunoId;
-              const jaCobrado = idsAlunosCobrados.includes(fat.alunoId);
+              const jaCobrado = idsAlunosCobradosSet.has(fat.alunoId);
               const corStatus =
                 fat.statusFinal === 'Pago' ? 'success' :
                 fat.statusFinal === 'Parcial' ? 'warning' :

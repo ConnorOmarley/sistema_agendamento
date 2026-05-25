@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Wallet,
@@ -65,12 +65,19 @@ export default function ConfiguracoesUsuario() {
   const [config, setConfig] = useState<ConfigForm>(CONFIG_DEFAULTS);
   const [savedConfig, setSavedConfig] = useState<ConfigForm | null>(null);
 
-  const isDirty = savedConfig !== null && configJSON(config) !== configJSON(savedConfig);
+  // useMemo: configJSON chama JSON.stringify duas vezes — executar só quando
+  // config ou savedConfig mudarem, não em qualquer renderização do formulário.
+  const isDirty = useMemo(
+    () => savedConfig !== null && configJSON(config) !== configJSON(savedConfig),
+    [config, savedConfig],
+  );
 
   const saveButtonRef = useRef<HTMLButtonElement>(null);
 
-  const set = <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) =>
-    setConfig(prev => ({ ...prev, [key]: value }));
+  // useCallback: referência estável evita que campos do formulário re-renderizem
+  // desnecessariamente quando outros campos do mesmo formulário são alterados.
+  const set = useCallback(<K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) =>
+    setConfig(prev => ({ ...prev, [key]: value })), []);
 
   // Avisa ao fechar aba/janela com alterações não salvas
   useEffect(() => {

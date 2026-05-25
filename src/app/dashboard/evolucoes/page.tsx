@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search, FileText, User, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -19,6 +19,9 @@ interface EvolucaoGeral {
   alunos: { id: string; nome: string } | null;
 }
 
+// Constante de módulo: evita recriar o array a cada renderização do map
+const MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'] as const;
+
 export default function EvolucoesGeral() {
   const [busca, setBusca] = useState('');
 
@@ -35,11 +38,16 @@ export default function EvolucoesGeral() {
   );
 
   const lista = evolucoes ?? [];
-  const evolucoesFiltradas = lista.filter((ev) => {
+
+  // useMemo: filtro só roda quando a lista ou o texto de busca mudam,
+  // não em cada renderização causada por outros estados do layout pai.
+  const evolucoesFiltradas = useMemo(() => {
     const termo = busca.toLowerCase();
-    const nome = ev.alunos?.nome.toLowerCase() || '';
-    return nome.includes(termo) || ev.relatorio.toLowerCase().includes(termo);
-  });
+    return lista.filter((ev) => {
+      const nome = ev.alunos?.nome.toLowerCase() || '';
+      return nome.includes(termo) || ev.relatorio.toLowerCase().includes(termo);
+    });
+  }, [lista, busca]);
 
   async function handleRemoverEvolucao(id: string, nomeAluno: string) {
     if (!confirm(`Remover este registro de ${nomeAluno}? Vai pra Lixeira e pode ser restaurado.`)) return;
@@ -104,7 +112,7 @@ export default function EvolucoesGeral() {
                 <Card key={ev.id} className="overflow-hidden hover:shadow-md transition-shadow">
                   <div className="flex">
                     <div className="gradient-primary text-white px-4 py-5 flex flex-col items-center justify-center shrink-0 w-20">
-                      <span className="text-[10px] uppercase font-bold opacity-90">{['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][parseInt(mes)-1]}</span>
+                      <span className="text-[10px] uppercase font-bold opacity-90">{MESES[parseInt(mes) - 1]}</span>
                       <span className="text-2xl font-black leading-none mt-0.5">{dia}</span>
                       <span className="text-[10px] opacity-75 mt-0.5">{ano}</span>
                     </div>

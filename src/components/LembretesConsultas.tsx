@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bell, MessageCircle, CheckCheck, Clock, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { AgendamentoStatus } from '@/types/domain';
@@ -42,6 +42,8 @@ export default function LembretesConsultas() {
   const [carregando, setCarregando] = useState(true);
   const [agendamentos, setAgendamentos] = useState<AgendamentoAmanha[]>([]);
   const [idsEnviados, setIdsEnviados] = useState<string[]>([]);
+  // Set derivado: O(1) no .has() vs O(n) no .includes() dentro do map de lembretes
+  const idsEnviadosSet = useMemo(() => new Set(idsEnviados), [idsEnviados]);
 
   async function carregarLembretes() {
     setCarregando(true);
@@ -97,7 +99,7 @@ export default function LembretesConsultas() {
     const numeroFormatado = numeroLimpo.length === 11 ? `55${numeroLimpo}` : numeroLimpo;
     window.open(`https://api.whatsapp.com/send?phone=${numeroFormatado}&text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
 
-    if (!idsEnviados.includes(ag.id)) {
+    if (!idsEnviadosSet.has(ag.id)) {
       setIdsEnviados(prev => [...prev, ag.id]);
     }
   };
@@ -133,7 +135,7 @@ export default function LembretesConsultas() {
       ) : (
         <div className="divide-y divide-[var(--color-border)] max-h-[400px] overflow-y-auto">
           {agendamentos.map((ag) => {
-            const enviado = idsEnviados.includes(ag.id);
+            const enviado = idsEnviadosSet.has(ag.id);
             return (
               <div key={ag.id} className="p-4 flex items-center gap-3 hover:bg-[var(--color-muted)]/40 transition-colors">
                 <div className="flex flex-col items-center justify-center size-12 rounded-xl bg-purple-50 text-purple-700 shrink-0">

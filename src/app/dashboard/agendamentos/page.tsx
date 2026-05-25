@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CalendarDays,
@@ -53,7 +53,17 @@ export default function AgendaGeral() {
   const [valorSessao, setValorSessao] = useState('150.00');
   const [obsSessao, setObsSessao] = useState('');
 
-  const [horariosOcupadosNoDia, setHorariosOcupadosNoDia] = useState<string[]>([]);
+  // useMemo+Set: derivado direto do estado — sem useState+useEffect intermediário.
+  // Antes: mudar dataSessao causava 2 renders (1 do input, 1 do setHorariosOcupadosNoDia).
+  // Agora: 1 render, lookup O(1) com Set.has() em vez de Array.includes().
+  const horariosOcupadosSet = useMemo<Set<string>>(() => {
+    if (!dataSessao) return new Set();
+    return new Set(
+      agendamentos
+        .filter(ag => ag.data === dataSessao && ag.status !== 'Faltou')
+        .map(ag => ag.horario.substring(0, 5))
+    );
+  }, [dataSessao, agendamentos]);
   const [modoManual, setModoManual] = useState(false);
   const [erroForm, setErroForm] = useState<string | null>(null);
   const [enviarEmail, setEnviarEmail] = useState(true);
@@ -93,14 +103,13 @@ export default function AgendaGeral() {
     return () => { cancelled = true; };
   }, [router, reloadTick]);
 
+  // Efeito mínimo: apenas limpa o horário selecionado se ele ficou ocupado.
+  // Separado do cálculo (useMemo acima) para não misturar derivação com side-effect.
   useEffect(() => {
-    if (!dataSessao) { setHorariosOcupadosNoDia([]); return; }
-    const ocupados = agendamentos
-      .filter(ag => ag.data === dataSessao && ag.status !== 'Faltou')
-      .map(ag => ag.horario.substring(0, 5));
-    setHorariosOcupadosNoDia(ocupados);
-    if (!modoManual && ocupados.includes(horarioSessao)) setHorarioSessao('');
-  }, [dataSessao, agendamentos, horarioSessao, modoManual]);
+    if (!modoManual && horarioSessao && horariosOcupadosSet.has(horarioSessao)) {
+      setHorarioSessao('');
+    }
+  }, [horariosOcupadosSet, modoManual, horarioSessao]);
 
   async function handleCriarAgendamento(e: React.FormEvent) {
     e.preventDefault();
@@ -229,7 +238,7 @@ export default function AgendaGeral() {
               ) : (
                 <div className="grid grid-cols-4 gap-1.5">
                   {HORARIOS_DISPONIVEIS.map((hora) => {
-                    const ocupado = horariosOcupadosNoDia.includes(hora);
+                    const ocupado = horariosOcupadosSet.has(hora);
                     const selecionado = horarioSessao === hora;
                     return (
                       <button

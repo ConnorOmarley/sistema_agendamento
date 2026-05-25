@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -108,10 +108,14 @@ export default function DashboardPrincipal() {
     }
   }
 
-  const alunosFiltrados = alunos.filter(a =>
-    a.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    (a.email && a.email.toLowerCase().includes(busca.toLowerCase()))
-  );
+  // useMemo: evita re-filtrar toda a lista a cada renderização não relacionada à busca
+  const alunosFiltrados = useMemo(() => {
+    const termo = busca.toLowerCase();
+    return alunos.filter(a =>
+      a.nome.toLowerCase().includes(termo) ||
+      (a.email && a.email.toLowerCase().includes(termo))
+    );
+  }, [alunos, busca]);
 
   if (carregando) {
     return (
@@ -240,7 +244,9 @@ export default function DashboardPrincipal() {
   );
 }
 
-function MetricaCard({
+// memo: MetricaCard é renderizado 5× no grid. Com props estáveis (só mudam
+// no carregamento de dados), memo elimina re-renders causados por busca e nomeNovoAluno.
+const MetricaCard = memo(function MetricaCard({
   icon, label, valor, gradient, highlight,
 }: {
   icon: React.ReactNode;
@@ -275,4 +281,4 @@ function MetricaCard({
       </div>
     </Card>
   );
-}
+});
