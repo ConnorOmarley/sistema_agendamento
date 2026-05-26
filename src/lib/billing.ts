@@ -164,8 +164,8 @@ export async function subscribeWithCreditCard(input: SubscribeInput): Promise<Su
       asaas_subscription_id: asaasSub.id,
       plan: input.plan,
       valor_mensal: PLANO_VALOR[input.plan],
-      // Mantém status TRIALING até o webhook PAYMENT_RECEIVED confirmar a 1ª cobrança
-      status: sub.status === 'EXPIRED' ? 'ACTIVE' : sub.status,
+      // Ao re-assinar após cancelamento/expiração, volta pra TRIALING se trial ainda vigente
+      status: ['EXPIRED', 'CANCELED', 'BLOCKED'].includes(sub.status) ? 'TRIALING' : sub.status,
       current_period_ends_at: nextDueDate,
     })
     .eq('user_id', input.userId)
