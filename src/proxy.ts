@@ -11,12 +11,16 @@ const AUTH_PAGES = ['/login', '/register', '/forgot-password'];
 // O usuário precisa poder cancelar ou contratar um plano para sair do bloqueio.
 const ALLOWED_WHEN_BLOCKED = ['/dashboard/upgrade', '/dashboard/configuracoes'];
 
-function isAccessAllowed(sub: { status: string; trial_ends_at: string | null } | null): boolean {
+function isAccessAllowed(sub: { status: string; trial_ends_at: string | null; current_period_ends_at: string | null } | null): boolean {
   if (!sub) return false;
   if (sub.status === 'TRIALING' && sub.trial_ends_at) {
     return new Date(sub.trial_ends_at) > new Date();
   }
-  return sub.status === 'ACTIVE' || sub.status === 'PAST_DUE' || sub.status === 'CANCELED';
+  // CANCELED: mantém acesso até fim do período pago, depois bloqueia
+  if (sub.status === 'CANCELED') {
+    return !!sub.current_period_ends_at && new Date(sub.current_period_ends_at) > new Date();
+  }
+  return sub.status === 'ACTIVE' || sub.status === 'PAST_DUE';
 }
 
 export async function proxy(request: NextRequest) {
@@ -44,7 +48,7 @@ export async function proxy(request: NextRequest) {
     if (!allowedWhenBlocked) {
       const { data: sub } = await supabase
         .from('subscriptions')
-        .select('status, trial_ends_at')
+        .select('status, trial_ends_at, current_period_ends_at')
         .eq('user_id', user.id)
         .maybeSingle();
 
