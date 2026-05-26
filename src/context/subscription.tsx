@@ -2,7 +2,10 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 
+export type SubscriptionPlan = 'FREE' | 'PROFISSIONAL' | 'ESTUDIO';
+
 export interface SubscriptionStatus {
+  plan: SubscriptionPlan;
   status: 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'BLOCKED' | 'CANCELED' | 'EXPIRED';
   diasRestantesTrial: number | null;
   hasAsaasSubscription: boolean;

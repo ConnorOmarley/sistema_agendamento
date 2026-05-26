@@ -15,10 +15,18 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/context/user';
+import { useSubscription } from '@/context/subscription';
+import type { SubscriptionPlan } from '@/context/subscription';
 import LembretesConsultas from '@/components/LembretesConsultas';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+
+const LIMITE_ALUNOS: Record<SubscriptionPlan, number> = {
+  FREE: 5,
+  PROFISSIONAL: 20,
+  ESTUDIO: Infinity,
+};
 
 interface Aluno {
   id: string;
@@ -38,6 +46,7 @@ interface Contadores {
 export default function DashboardPrincipal() {
   const router = useRouter();
   const userInfo = useUser();
+  const { sub } = useSubscription();
   const [carregando, setCarregando] = useState(true);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [busca, setBusca] = useState('');
@@ -92,6 +101,17 @@ export default function DashboardPrincipal() {
   async function handleCriarAluno(e: React.FormEvent) {
     e.preventDefault();
     if (!nomeNovoAluno.trim()) return;
+
+    const plano = (sub?.plan ?? 'FREE') as SubscriptionPlan;
+    const limite = LIMITE_ALUNOS[plano];
+    if (alunos.length >= limite) {
+      toast.error(
+        plano === 'ESTUDIO'
+          ? 'Limite de alunos atingido.'
+          : `Limite de ${limite} alunos atingido no plano ${plano === 'PROFISSIONAL' ? 'Profissional' : 'Gratuito'}. Faça upgrade para adicionar mais alunos.`
+      );
+      return;
+    }
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;

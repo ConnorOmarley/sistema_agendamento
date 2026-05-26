@@ -36,7 +36,7 @@ const PLANOS = {
     features: [
       'Tudo do Profissional',
       'Sem limite de alunos',
-      'Audit log visível (LGPD)',
+      'Bot de WhatsApp automático (em breve)',
       'Prioridade no suporte',
       'Futuras integrações fiscais',
     ],
@@ -62,7 +62,7 @@ function fmtCartao(v: string) {
 
 export default function UpgradePage() {
   const router = useRouter();
-  const { sub: subCtx } = useSubscription();
+  const { sub: subCtx, refresh: refreshSub } = useSubscription();
   const [carregando, setCarregando] = useState(true);
   const [plano, setPlano] = useState<Plano>('PROFISSIONAL');
   const statusAtual = subCtx ? { status: subCtx.status, diasRestantesTrial: subCtx.diasRestantesTrial } : null;
@@ -145,6 +145,7 @@ export default function UpgradePage() {
 
       setSucesso(true);
       setEnviando(false);
+      refreshSub();
       setTimeout(() => router.push('/dashboard'), 3000);
     } catch (err) {
       setErro(err instanceof Error ? err.message : 'Erro de conexão');
