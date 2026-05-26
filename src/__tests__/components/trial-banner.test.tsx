@@ -33,6 +33,7 @@ import { TrialBanner } from '@/components/dashboard/trial-banner';
 
 function makeSub(overrides: Partial<SubscriptionStatus> = {}): SubscriptionStatus {
   return {
+    plan: 'PROFISSIONAL',
     status: 'TRIALING',
     diasRestantesTrial: 14,
     hasAsaasSubscription: false,
