@@ -14,8 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sistema de Agendamento — Pedagogia & Psicopedagogia",
-  description: "Plataforma para profissionais de acompanhamento pedagógico gerenciarem alunos, agenda, prontuários e cobranças.",
+  title: {
+    default: "Acompanha · Pedagogia & Psicopedagogia",
+    template: "%s · Acompanha",
+  },
+  description: "Plataforma para pedagogos e psicopedagogos gerenciarem alunos, agenda, prontuários e cobranças.",
 };
 
 export default function RootLayout({
