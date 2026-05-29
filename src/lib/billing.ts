@@ -257,11 +257,16 @@ export async function updateSubscriptionStatus(
 
 /**
  * Helper de access control: indica se o usuário pode acessar o dashboard.
+ * Deve ser idêntico à função isAccessAllowed do proxy.ts.
  */
 export function isAccessAllowed(sub: SubscriptionRow | null): boolean {
   if (!sub) return false;
   if (sub.status === 'TRIALING' && sub.trial_ends_at) {
     return new Date(sub.trial_ends_at) > new Date();
   }
-  return sub.status === 'ACTIVE' || sub.status === 'PAST_DUE' || sub.status === 'CANCELED';
+  // CANCELED: mantém acesso até fim do período pago, depois bloqueia
+  if (sub.status === 'CANCELED') {
+    return !!sub.current_period_ends_at && new Date(sub.current_period_ends_at) > new Date();
+  }
+  return sub.status === 'ACTIVE' || sub.status === 'PAST_DUE';
 }

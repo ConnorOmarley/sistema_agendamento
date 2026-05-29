@@ -92,7 +92,8 @@ export default function AgendaGeral() {
         .eq('user_id', session.user.id)
         .is('deleted_at', null)
         .order('data', { ascending: false })
-        .order('horario', { ascending: true });
+        .order('horario', { ascending: true })
+        .limit(200);
 
       if (!cancelled) {
         if (listaAgendamentos) setAgendamentos(listaAgendamentos as unknown as Agendamento[]);
@@ -156,7 +157,13 @@ export default function AgendaGeral() {
   }
 
   async function atualizarAgendamento(id: string, campo: 'status' | 'status_pagamento', valor: string) {
-    const { error } = await supabase.from('agendamentos').update({ [campo]: valor }).eq('id', id);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { error } = await supabase
+      .from('agendamentos')
+      .update({ [campo]: valor })
+      .eq('id', id)
+      .eq('user_id', session.user.id);
     if (!error) setAgendamentos(atual => atual.map(ag => ag.id === id ? { ...ag, [campo]: valor } : ag));
     else toast.error('Não foi possível atualizar o agendamento. Tente novamente.');
   }

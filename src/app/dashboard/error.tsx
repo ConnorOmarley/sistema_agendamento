@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
+import * as Sentry from '@sentry/nextjs';
 import { Card } from '@/components/ui/card';
 
 export default function DashboardError({
@@ -15,7 +16,7 @@ export default function DashboardError({
   const router = useRouter();
 
   useEffect(() => {
-    console.error('[DashboardError boundary]', error);
+    Sentry.captureException(error, { extra: { digest: error.digest, boundary: 'DashboardError' } });
   }, [error]);
 
   return (

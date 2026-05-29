@@ -30,6 +30,7 @@ import {
 } from '@/lib/billing';
 import type { AsaasWebhookPayload } from '@/lib/asaas/types';
 import { captureException } from '@/lib/monitoring';
+import { logger } from '@/lib/logger';
 
 const webhookSchema = z.object({
   event: z.string().min(1),
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
   const receivedToken = request.headers.get('asaas-access-token');
 
   if (!expectedToken) {
-    console.error('[webhook] ASAAS_WEBHOOK_TOKEN não configurada — rejeitando');
+    logger.error('ASAAS_WEBHOOK_TOKEN não configurada — rejeitando webhook');
     return NextResponse.json({ ok: false, error: 'Webhook não configurado' }, { status: 503 });
   }
   const tokensMatch =
