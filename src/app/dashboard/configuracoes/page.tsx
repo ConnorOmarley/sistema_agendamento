@@ -390,8 +390,8 @@ export default function ConfiguracoesUsuario() {
           </div>
         </Card>
 
-        <div className="flex justify-end">
-          <Button ref={saveButtonRef} type="submit" size="lg" disabled={salvando || !isDirty}>
+        <div className="flex justify-center sm:justify-end">
+          <Button ref={saveButtonRef} type="submit" size="lg" disabled={salvando || !isDirty} className="w-full sm:w-auto">
             {salvando ? 'Salvando...' : <><Save className="size-4" /> Salvar configurações</>}
           </Button>
         </div>
