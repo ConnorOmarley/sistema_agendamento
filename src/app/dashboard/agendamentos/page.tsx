@@ -345,7 +345,7 @@ export default function AgendaGeral() {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {/* Status da sessão */}
                       <div className="flex rounded-xl border border-[var(--color-border)] overflow-hidden text-[10px] font-bold">
                         {(['Agendado', 'Concluído', 'Faltou'] as const).map((s, i) => (
@@ -353,8 +353,9 @@ export default function AgendaGeral() {
                             key={s}
                             type="button"
                             onClick={() => atualizarAgendamento(ag.id, 'status', s)}
+                            title={s}
                             className={[
-                              'px-2.5 py-1.5 transition-colors',
+                              'px-2 py-1.5 transition-colors flex items-center gap-1',
                               i > 0 ? 'border-l border-[var(--color-border)]' : '',
                               ag.status === s
                                 ? s === 'Concluído' ? 'bg-emerald-500 text-white'
@@ -363,7 +364,8 @@ export default function AgendaGeral() {
                                 : 'bg-white text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]',
                             ].join(' ')}
                           >
-                            {s === 'Agendado' ? '🗓️' : s === 'Concluído' ? '✅' : '❌'} {s}
+                            <span>{s === 'Agendado' ? '🗓️' : s === 'Concluído' ? '✅' : '❌'}</span>
+                            <span className="hidden sm:inline">{s}</span>
                           </button>
                         ))}
                       </div>
@@ -377,15 +379,17 @@ export default function AgendaGeral() {
                               key={p}
                               type="button"
                               onClick={() => atualizarAgendamento(ag.id, 'status_pagamento', p)}
+                              title={p}
                               className={[
-                                'px-2.5 py-1.5 transition-colors',
+                                'px-2 py-1.5 transition-colors flex items-center gap-1',
                                 i > 0 ? 'border-l border-[var(--color-border)]' : '',
                                 ag.status_pagamento === p
                                   ? p === 'Pago' ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-white'
                                   : 'bg-white text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]',
                               ].join(' ')}
                             >
-                              {p === 'Pendente' ? '⏳' : '💰'} {p}
+                              <span>{p === 'Pendente' ? '⏳' : '💰'}</span>
+                              <span className="hidden sm:inline">{p}</span>
                             </button>
                           ))}
                         </div>

@@ -317,65 +317,69 @@ export default function FechamentoMensal() {
                     : 'p-5 hover:bg-[var(--color-muted)]/30 transition-colors'
                   }
                 >
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="size-12 rounded-xl gradient-primary text-white font-black flex items-center justify-center text-sm shadow-md shadow-purple-500/25 shrink-0">
+                  <div className="flex items-start gap-3">
+                    <div className="size-12 rounded-xl gradient-primary text-white font-black flex items-center justify-center text-sm shadow-md shadow-purple-500/25 shrink-0 mt-0.5">
                       {fat.nomeAluno.charAt(0).toUpperCase()}
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-bold text-sm">{fat.nomeAluno}</p>
-                        {fat.contatoResponsavel && <Badge variant="warning">👨‍👦 Resp.</Badge>}
-                        {isAlvo && <Badge variant="success">Foco atual</Badge>}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-bold text-sm">{fat.nomeAluno}</p>
+                            {fat.contatoResponsavel && <Badge variant="warning">👨‍👦 Resp.</Badge>}
+                            {isAlvo && <Badge variant="success">Foco atual</Badge>}
+                          </div>
+                          <p className="text-[11px] text-[var(--color-muted-foreground)] mt-0.5">
+                            {fat.totalSessoes} {fat.totalSessoes === 1 ? 'sessão' : 'sessões'} no mês
+                          </p>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <p className="font-black text-base">R$ {fat.valorTotal.toFixed(2)}</p>
+                          <Badge variant={corStatus} className="mt-1">
+                            {fat.valorTotal === 0 ? 'Sem cobranças' : fat.statusFinal}
+                          </Badge>
+                        </div>
                       </div>
-                      <p className="text-[11px] text-[var(--color-muted-foreground)] mt-0.5">
-                        {fat.totalSessoes} {fat.totalSessoes === 1 ? 'sessão' : 'sessões'} no mês
-                      </p>
-                    </div>
 
-                    <div className="text-right shrink-0">
-                      <p className="font-black text-lg">R$ {fat.valorTotal.toFixed(2)}</p>
-                      <Badge variant={corStatus} className="mt-1">
-                        {fat.valorTotal === 0 ? 'Sem atendimentos' : fat.statusFinal}
-                      </Badge>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Link
-                        href={`/dashboard/alunos/${fat.alunoId}`}
-                        className="size-9 rounded-xl border border-[var(--color-border)] bg-white hover:bg-[var(--color-muted)] flex items-center justify-center transition-colors"
-                        title="Ver perfil"
-                      >
-                        <Eye className="size-4 text-[var(--color-muted-foreground)]" />
-                      </Link>
-
-                      {fat.totalSessoes > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => gerarRelatorio(fat)}
-                          title="Gerar relatório mensal em PDF"
-                          className="size-9 rounded-xl border border-[var(--color-border)] bg-white hover:bg-violet-50 hover:border-violet-300 flex items-center justify-center transition-colors"
+                      <div className="flex items-center gap-2 mt-3">
+                        <Link
+                          href={`/dashboard/alunos/${fat.alunoId}`}
+                          className="size-9 rounded-xl border border-[var(--color-border)] bg-white hover:bg-[var(--color-muted)] flex items-center justify-center transition-colors"
+                          title="Ver perfil"
                         >
-                          <FileDown className="size-4 text-violet-500" />
-                        </button>
-                      )}
+                          <Eye className="size-4 text-[var(--color-muted-foreground)]" />
+                        </Link>
 
-                      {fat.valorTotal > 0 && fat.statusFinal !== 'Pago' && (
-                        <button
-                          type="button"
-                          onClick={() => dispararWhatsApp(fat)}
-                          disabled={jaCobrado}
-                          className={
-                            isAlvo
-                              ? 'flex items-center gap-1.5 px-3 py-2 rounded-xl gradient-emerald text-white text-xs font-black shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-300 animate-pulse'
-                              : jaCobrado
-                              ? 'flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--color-muted)] text-[var(--color-muted-foreground)] text-xs font-medium cursor-default'
-                              : 'flex items-center gap-1.5 px-3 py-2 rounded-xl gradient-emerald text-white text-xs font-black shadow-md shadow-emerald-500/25 hover:shadow-lg active:scale-95 transition-all'
-                          }
-                        >
-                          {jaCobrado ? <><CheckCheck className="size-3.5" /> Enviado</> : isAlvo ? <><MessageCircle className="size-3.5" /> Enviar próximo</> : <><MessageCircle className="size-3.5" /> Cobrar</>}
-                        </button>
-                      )}
+                        {fat.totalSessoes > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => gerarRelatorio(fat)}
+                            title="Gerar relatório mensal em PDF"
+                            className="size-9 rounded-xl border border-[var(--color-border)] bg-white hover:bg-violet-50 hover:border-violet-300 flex items-center justify-center transition-colors"
+                          >
+                            <FileDown className="size-4 text-violet-500" />
+                          </button>
+                        )}
+
+                        {fat.valorTotal > 0 && fat.statusFinal !== 'Pago' && (
+                          <button
+                            type="button"
+                            onClick={() => dispararWhatsApp(fat)}
+                            disabled={jaCobrado}
+                            className={
+                              isAlvo
+                                ? 'flex items-center gap-1.5 px-3 py-2 rounded-xl gradient-emerald text-white text-xs font-black shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-300 animate-pulse'
+                                : jaCobrado
+                                ? 'flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--color-muted)] text-[var(--color-muted-foreground)] text-xs font-medium cursor-default'
+                                : 'flex items-center gap-1.5 px-3 py-2 rounded-xl gradient-emerald text-white text-xs font-black shadow-md shadow-emerald-500/25 hover:shadow-lg active:scale-95 transition-all'
+                            }
+                          >
+                            {jaCobrado ? <><CheckCheck className="size-3.5" /> Enviado</> : isAlvo ? <><MessageCircle className="size-3.5" /> Enviar próximo</> : <><MessageCircle className="size-3.5" /> Cobrar</>}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
